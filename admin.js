@@ -15,6 +15,7 @@ const UNITS = [
   { unit:"Unit 11B", name:"Fernandez Household", type:"Owner", status:"Occupied", contact:"0917 555 1007", overdue:0, usage:"owner" },
   { unit:"Unit 6B", name:"Fugaban Household", type:"Owner", status:"Occupied", contact:"0917 555 0145", overdue:0, usage:"owner" }
 ];
+
 // Best-effort bridge from the resident portal's Unit usage declaration (resident.html),
 // stored via localStorage when both pages are opened from the same origin/browser
 // (e.g. via Live Server). Front-end-only demo, so this is optional and silently
@@ -37,40 +38,63 @@ const UNITS = [
     });
   } catch(e){ /* storage unavailable — sample data still shows */ }
 })();
+
 const FACILITIES = [
-  { name:"Swimming Pool", hours:"6:00 AM – 8:00 PM" }, { name:"Function Hall", hours:"8:00 AM – 10:00 PM" }
+  { name:"Swimming Pool", hours:"6:00 AM – 8:00 PM" },
+  { name:"Function Hall", hours:"8:00 AM – 10:00 PM" }
 ];
+
 const SLOT_TIMES = ["8–10","10–12","12–2","2–4","4–6","6–8","8–10"];
 const BASE_BOOKED = [[4,6],[0,2]];
+
 const BOOKING_REQS = [
   { id:1, who:"Reyes Household", place:"Function Hall", when:"Oct 3, 6:00 PM – 10:00 PM" },
   { id:2, who:"Cruz Household", place:"Swimming Pool", when:"Tomorrow, 3:00 PM – 5:00 PM" },
   { id:3, who:"Garcia Household", place:"Function Hall", when:"Sat, 2:00 PM – 6:00 PM" },
   { id:4, who:"Villanueva Household", place:"Swimming Pool", when:"Oct 5, 1:00 PM – 4:00 PM" }
 ];
+
 const DUES = [
-  { id:1, unit:"Unit 12A", name:"Reyes Household", months:1 }, { id:2, unit:"Unit 7C", name:"Garcia Household", months:1 },
-  { id:3, unit:"Unit 3B", name:"Villanueva Household", months:2 }, { id:4, unit:"Unit 15D", name:"Mendoza Household", months:1 },
-  { id:5, unit:"Unit 9A", name:"Cruz Household", months:3 }, { id:6, unit:"Unit 21B", name:"Santos Household", months:1 },
-  { id:7, unit:"Unit 5A", name:"Vacant unit", months:2 }, { id:8, unit:"Unit 18C", name:"Aquino Household", months:1 }
+  { id:1, unit:"Unit 12A", name:"Reyes Household", months:1 },
+  { id:2, unit:"Unit 7C", name:"Garcia Household", months:1 },
+  { id:3, unit:"Unit 3B", name:"Villanueva Household", months:2 },
+  { id:4, unit:"Unit 15D", name:"Mendoza Household", months:1 },
+  { id:5, unit:"Unit 9A", name:"Cruz Household", months:3 },
+  { id:6, unit:"Unit 21B", name:"Santos Household", months:1 },
+  { id:7, unit:"Unit 5A", name:"Vacant unit", months:2 },
+  { id:8, unit:"Unit 18C", name:"Aquino Household", months:1 }
 ].map(d => ({ ...d, amt: d.months * 450 }));
+
 const GRIEVANCES = [
   { title:"Street light out on the Phase 2 road", by:"Reported by Unit 8A" },
   { title:"Construction noise after 8 PM", by:"Reported by Unit 14B" },
   { title:"Clogged drainage near the parking area", by:"Reported by Unit 3D" }
 ];
+
 const DOCS = [
-  { name:"House Rules and Regulations", cat:"Policy", date:"Updated Sep 1" }, { name:"2026 Association Dues Schedule", cat:"Finance", date:"Updated Aug 15" },
-  { name:"Facility Reservation Form", cat:"Form", date:"Updated Jul 20" }, { name:"Fire Safety Advisory", cat:"Notice", date:"Sep 10" },
+  { name:"House Rules and Regulations", cat:"Policy", date:"Updated Sep 1" },
+  { name:"2026 Association Dues Schedule", cat:"Finance", date:"Updated Aug 15" },
+  { name:"Facility Reservation Form", cat:"Form", date:"Updated Jul 20" },
+  { name:"Fire Safety Advisory", cat:"Notice", date:"Sep 10" },
   { name:"Board Meeting Minutes, August", cat:"Minutes", date:"Aug 30" }
 ];
-const VENDORS = ["Security guards","Landscaping","Garbage collection","Plumbing and repairs","Elevator maintenance"];
+
+const VENDORS = [
+  "Security guards",
+  "Landscaping",
+  "Garbage collection",
+  "Plumbing and repairs",
+  "Elevator maintenance"
+];
+
 const ANNOUNCEMENTS = [
   { id:1, title:"Water interruption on Sept 30", body:"Scheduled maintenance, 10 PM–4 AM.", date:"Sep 24, 2026", status:"Published", type:"Maintenance", sms:true },
   { id:2, title:"Reminder: October dues due on the 5th", body:"Please settle dues on or before due date to avoid penalties.", date:"Sep 20, 2026", status:"Published", type:"General", sms:false },
   { id:3, title:"Elevator B undergoing inspection", body:"Elevator B out of service Oct 1, 8 AM–12 PM.", date:"Sep 18, 2026", status:"Draft", type:"Maintenance", sms:false }
 ];
+
 const RESIDENT_PHONE_COUNT = 184;
+
 const EVENTS = [
   { id:1, title:"Community Clean-Up Drive", date:"Oct 24, 2026 · 7:00 AM", place:"Ground floor lobby" },
   { id:2, title:"Halloween Kids' Party", date:"Oct 31, 2026 · 4:00 PM", place:"Function Hall" },
@@ -83,18 +107,32 @@ const state = {
   loginUser: "",
   loginPass: "",
   showPassword: false,
-  showForgot: false, forgotEmail: "", forgotSent: false,
+  showForgot: false,
+  forgotEmail: "",
+  forgotSent: false,
   loginError: false,
   trusted: [
     { name:"Ana Reyes", email:"ana.reyes@cityresidences.ph", phone:"0917 555 2201", role:"Board member", added:"Sep 2, 2026", suspended:false },
     { name:"Marco Dizon", email:"marco.dizon@cityresidences.ph", phone:"0917 555 2202", role:"Admin staff", added:"Sep 14, 2026", suspended:false }
   ],
-  newName: "", newEmail: "", newPhone: "", newUnit: "", newRole: "Admin staff", manageError: "",
-  ann: {}, newAnnTitle: "", newAnnBody: "", newAnnType: "General", newAnnSms: true, smsToast: "",
-  newEventTitle: "", newEventDate: "", newEventPlace: "",
+  newName: "",
+  newEmail: "",
+  newPhone: "",
+  newUnit: "",
+  newRole: "Admin staff",
+  manageError: "",
+  ann: {},
+  newAnnTitle: "",
+  newAnnBody: "",
+  newAnnType: "General",
+  newAnnSms: true,
+  smsToast: "",
+  newEventTitle: "",
+  newEventDate: "",
+  newEventPlace: "",
   newVendor: "",
   view: "home",
-    unitFilter: "all",
+  unitFilter: "all",
   unitSearch: "",
   manageSearch: "",
   facIdx: 0,
@@ -102,7 +140,8 @@ const state = {
   bookAction: {},
   finFilter: "unpaid",
   paid: {},
-  bellOpen: false, bellSeen: false,
+  bellOpen: false,
+  bellSeen: false,
   reminded: {},
   gStatus: [0,1,2],
   darkMode: false,
@@ -110,83 +149,236 @@ const state = {
   motorParkingRateDraft: "500",
   rateToast: ""
 };
-const VALID_LOGINS = ["joseph","joseph capili","joseph.capili","owner","admin"];
 
+const VALID_LOGINS = [
+  "joseph",
+  "joseph capili",
+  "joseph.capili",
+  "owner",
+  "admin"
+];
 
 /* ---------- Auth ---------- */
 function doLogin(){
   const u = (state.loginUser||"").trim().toLowerCase();
   const match = state.trusted.find(t => t.email.toLowerCase() === u);
-  if (match && match.suspended){ set({ authed:false, loginError:true }); return; }
+
+  if (match && match.suspended){
+    set({ authed:false, loginError:true });
+    return;
+  }
+
   const ok = VALID_LOGINS.indexOf(u) >= 0 || !!match;
+
   if (ok) set({ authed:true, loginError:false });
   else set({ loginError:true });
 }
-function doLogout(){ set({ authed:false, loginUser:"", loginPass:"", loginError:false, view:"home" }); }
-function onLoginInput(e){ state.loginUser = e.target.value; state.loginError = false; }
-function onLoginPassInput(e){ state.loginPass = e.target.value; state.loginError = false; }
-function onLoginKey(e){ if (e.key === "Enter") doLogin(); }
-function togglePasswordVisible(){ state.showPassword = !state.showPassword; render(); }
-function toggleForgot(){ state.showForgot = !state.showForgot; render(); }
-function sendResetLink(){ if (!state.forgotEmail.trim()) return; set({ forgotSent:true }); }
+
+function doLogout(){
+  set({
+    authed:false,
+    loginUser:"",
+    loginPass:"",
+    loginError:false,
+    view:"home"
+  });
+}
+
+function onLoginInput(e){
+  state.loginUser = e.target.value;
+  state.loginError = false;
+}
+
+function onLoginPassInput(e){
+  state.loginPass = e.target.value;
+  state.loginError = false;
+}
+
+function onLoginKey(e){
+  if (e.key === "Enter") doLogin();
+}
+
+function togglePasswordVisible(){
+  state.showPassword = !state.showPassword;
+  render();
+}
+
+function toggleForgot(){
+  state.showForgot = !state.showForgot;
+  render();
+}
+
+function sendResetLink(){
+  if (!state.forgotEmail.trim()) return;
+  set({ forgotSent:true });
+}
+
 function addTrusted(){
   const name = state.newName.trim();
   const email = state.newEmail.trim();
-  if (!name || !email){ set({ manageError:"Full name and email are required." }); return; }
-  if (!/^\S+@\S+\.\S+$/.test(email)){ set({ manageError:"Enter a valid email address." }); return; }
-  const clash = email.toLowerCase() === "owner@cityresidences.ph" || state.trusted.some(t => t.email.toLowerCase() === email.toLowerCase());
-  if (clash){ set({ manageError:"An account with that email already exists." }); return; }
-  if (state.newRole === "Resident" && !state.newUnit.trim()){ set({ manageError:"Assign a unit to confirm this resident's account." }); return; }
+
+  if (!name || !email){
+    set({ manageError:"Full name and email are required." });
+    return;
+  }
+
+  if (!/^\S+@\S+\.\S+$/.test(email)){
+    set({ manageError:"Enter a valid email address." });
+    return;
+  }
+
+  const clash =
+    email.toLowerCase() === "owner@cityresidences.ph" ||
+    state.trusted.some(t => t.email.toLowerCase() === email.toLowerCase());
+
+  if (clash){
+    set({ manageError:"An account with that email already exists." });
+    return;
+  }
+
+  if (state.newRole === "Resident" && !state.newUnit.trim()){
+    set({ manageError:"Assign a unit to confirm this resident's account." });
+    return;
+  }
+
   const unit = state.newRole === "Resident" ? state.newUnit.trim() : "—";
+
   logAct("Added trusted account for "+name+" ("+state.newRole+")");
-  state.trusted.push({ name, email, phone: state.newPhone.trim() || "—", unit, role: state.newRole, added: "Just now", suspended:false });
-  set({ newName:"", newEmail:"", newPhone:"", newUnit:"", manageError:"" });
+
+  state.trusted.push({
+    name,
+    email,
+    phone: state.newPhone.trim() || "—",
+    unit,
+    role: state.newRole,
+    added: "Just now",
+    suspended:false
+  });
+
+  set({
+    newName:"",
+    newEmail:"",
+    newPhone:"",
+    newUnit:"",
+    manageError:""
+  });
 }
-function toggleSuspend(i){ state.trusted[i].suspended = !state.trusted[i].suspended; render(); }
+
+function toggleSuspend(i){
+  state.trusted[i].suspended = !state.trusted[i].suspended;
+  render();
+}
+
 function revokeTrusted(i){
   const t = state.trusted[i];
-  if (!confirm(`Permanently revoke access for ${t.name}? This removes their account and cannot be undone.`)) return;
+
+  if (!confirm(`Permanently revoke access for ${t.name}? This removes their account and cannot be undone.`)){
+    return;
+  }
+
   logAct("Revoked access for "+t.name);
   state.trusted.splice(i,1);
   render();
 }
+
 function publishAnn(id){
   logAct("Published announcement “"+(ANNOUNCEMENTS.find(x=>x.id===id)||{}).title+"”");
   state.ann[id] = "Published";
+
   const a = ANNOUNCEMENTS.find(a=>a.id===id);
+
   if (a && a.sms){
-    set({ smsToast: `Text alert sent — "${a.title}" was texted to all ${RESIDENT_PHONE_COUNT} residents' phone numbers on file. (Demo only — no real SMS is sent.)` });
+    set({
+      smsToast: `Text alert sent — "${a.title}" was texted to all ${RESIDENT_PHONE_COUNT} residents' phone numbers on file. (Demo only — no real SMS is sent.)`
+    });
     return;
   }
+
   render();
 }
+
 function addAnnouncement(){
   if (!state.newAnnTitle.trim()) return;
+
   logAct("Published announcement “"+state.newAnnTitle.trim()+"”");
+
   const type = state.newAnnType || "General";
   const sms = !!state.newAnnSms;
-  ANNOUNCEMENTS.unshift({ id: Date.now(), title: state.newAnnTitle.trim(), body: state.newAnnBody.trim() || "—", date: "Just now", status: "Published", type, sms });
+
+  ANNOUNCEMENTS.unshift({
+    id: Date.now(),
+    title: state.newAnnTitle.trim(),
+    body: state.newAnnBody.trim() || "—",
+    date: "Just now",
+    status: "Published",
+    type,
+    sms
+  });
+
   const toast = sms
     ? `Text alert sent — "${state.newAnnTitle.trim()}" was texted to all ${RESIDENT_PHONE_COUNT} residents' phone numbers on file. (Demo only — no real SMS is sent.)`
     : "";
-  set({ newAnnTitle:"", newAnnBody:"", newAnnType:"General", newAnnSms:true, smsToast: toast });
+
+  set({
+    newAnnTitle:"",
+    newAnnBody:"",
+    newAnnType:"General",
+    newAnnSms:true,
+    smsToast: toast
+  });
 }
-function dismissSmsToast(){ set({ smsToast:"" }); }
+
+function dismissSmsToast(){
+  set({ smsToast:"" });
+}
+
 function addEvent(){
   if (!state.newEventTitle.trim()) return;
+
   logAct("Added event “"+state.newEventTitle.trim()+"”");
-  EVENTS.unshift({ id: Date.now(), title: state.newEventTitle.trim(), date: state.newEventDate.trim() || "Date TBD", place: state.newEventPlace.trim() || "Venue TBD" });
-  set({ newEventTitle:"", newEventDate:"", newEventPlace:"" });
+
+  EVENTS.unshift({
+    id: Date.now(),
+    title: state.newEventTitle.trim(),
+    date: state.newEventDate.trim() || "Date TBD",
+    place: state.newEventPlace.trim() || "Venue TBD"
+  });
+
+  set({
+    newEventTitle:"",
+    newEventDate:"",
+    newEventPlace:""
+  });
 }
-function deleteAnn(id){ logAct("Deleted an announcement"); const i = ANNOUNCEMENTS.findIndex(a=>a.id===id); if (i>=0) ANNOUNCEMENTS.splice(i,1); render(); }
-function editAnn(id){
-  const a = ANNOUNCEMENTS.find(a=>a.id===id); if (!a) return;
-  const t = prompt("Edit title", a.title); if (t===null) return;
-  const b = prompt("Edit message", a.body); if (b===null) return;
-  a.title = t.trim() || a.title; a.body = b.trim() || a.body;
+
+function deleteAnn(id){
+  logAct("Deleted an announcement");
+  const i = ANNOUNCEMENTS.findIndex(a=>a.id===id);
+  if (i>=0) ANNOUNCEMENTS.splice(i,1);
   render();
 }
-function deleteEvent(id){ logAct("Deleted a community event"); const i = EVENTS.findIndex(e=>e.id===id); if (i>=0) EVENTS.splice(i,1); render(); }
+
+function editAnn(id){
+  const a = ANNOUNCEMENTS.find(a=>a.id===id);
+  if (!a) return;
+
+  const t = prompt("Edit title", a.title);
+  if (t===null) return;
+
+  const b = prompt("Edit message", a.body);
+  if (b===null) return;
+
+  a.title = t.trim() || a.title;
+  a.body = b.trim() || a.body;
+  render();
+}
+
+function deleteEvent(id){
+  logAct("Deleted a community event");
+  const i = EVENTS.findIndex(e=>e.id===id);
+  if (i>=0) EVENTS.splice(i,1);
+  render();
+}
 
 function renderLogin(){
   return `
@@ -232,23 +424,43 @@ function renderLogin(){
 
 /* ---------- Render ---------- */
 function render(){
-  document.documentElement.setAttribute("data-theme", state.darkMode ? "dark" : "light");
+  document.documentElement.setAttribute(
+    "data-theme",
+    state.darkMode ? "dark" : "light"
+  );
+
   const app = document.getElementById("app");
-  // Play the entrance animation only when the screen actually changes (not on every keystroke re-render).
-  const viewChanged = state.view !== window.__lastView, authChanged = state.authed !== window.__lastAuthed;
-  window.__lastView = state.view; window.__lastAuthed = state.authed;
+
+  // Play the entrance animation only when the screen actually changes.
+  const viewChanged = state.view !== window.__lastView;
+  const authChanged = state.authed !== window.__lastAuthed;
+
+  window.__lastView = state.view;
+  window.__lastAuthed = state.authed;
+
   app.classList.toggle("enter", viewChanged || authChanged);
   app.classList.toggle("enter-shell", authChanged);
-  if (viewChanged && !authChanged && state.authed) window.scrollTo({ top:0, behavior:"smooth" });
+
+  if (viewChanged && !authChanged && state.authed){
+    window.scrollTo({ top:0, behavior:"smooth" });
+  }
+
   const active = document.activeElement;
   const focusId = (active && active.id) ? active.id : null;
-  const selStart = (focusId && active.selectionStart != null) ? active.selectionStart : null;
-  const selEnd = (focusId && active.selectionEnd != null) ? active.selectionEnd : null;
+  const selStart = (focusId && active.selectionStart != null)
+    ? active.selectionStart
+    : null;
+  const selEnd = (focusId && active.selectionEnd != null)
+    ? active.selectionEnd
+    : null;
+
   if (!state.authed){
     app.innerHTML = renderLogin();
     return;
   }
+
   const isHome = state.view === "home";
+
   mountApp(app, `
     <div class="shell">
       <aside class="side">
@@ -256,7 +468,7 @@ function render(){
         <div class="side-label">General</div>
         <nav>${navBtn("home","Dashboard")}${navBtn("units","Units")}${navBtn("fac","Facility")}${navBtn("ann","Announcements")}${navBtn("polls","Polls")}</nav>
         <div class="side-label">Tools</div>
-        <nav>${navBtn("fin","Finance")}${navBtn("reports","Reports")}${navBtn("req","Grievances")}${navBtn("parking","Parking")}${navBtn("rentals","Rentals")}</nav>
+        <nav>${navBtn("fin","Finance")}<button type="button" title="Expenses" class="${state.view === "expenses" ? "active" : ""}" onclick="set({view:'expenses'})">${icon("fin")}<span>Expenses</span></button>${navBtn("reports","Reports")}${navBtn("req","Grievances")}${navBtn("parking","Parking")}${navBtn("rentals","Rentals")}</nav>
         <div class="side-label">Admin</div>
         <nav>${navBtn("log","Activity log")}${navBtn("manage","Access")}${navBtn("settings","Settings")}</nav>
         <div class="side-foot">
@@ -283,21 +495,29 @@ function render(){
       </main>
     </div>
   `);
+
   if (focusId){
     const el = document.getElementById(focusId);
-    if (el){ el.focus(); if (selStart != null && el.setSelectionRange) el.setSelectionRange(selStart, selEnd); }
+    if (el){
+      el.focus();
+      if (selStart != null && el.setSelectionRange){
+        el.setSelectionRange(selStart, selEnd);
+      }
+    }
   }
 }
+
 function titles(){
   return {
     home: [greeting() + ", Joseph", homeSummary()],
     units: ["Units & residents","Maintain unit, occupancy, and resident records."],
     fac: ["Facility booking","Manage facilities, check availability, and approve or deny reservation requests."],
+    expenses: ["Expenses","Record daily expenses and review monthly totals."],
     fin: ["Finance","Dues, charges, payment status and payment history."],
     req: ["Grievances &amp; documents","Track resident concerns and manage shared files."],
     manage: ["Manage access","Add or revoke trusted accounts. Only the owner can grant access — there is no public sign-up."],
     ann: ["Announcements","Publish community announcements and events."],
-    rentals: ["Unit rentals","Review units residents have declared as leased, short-term rentals, or home businesses."],
+    rentals: ["Unit rentals","Approve what residents declare about their unit, and keep the rental and occupancy registry up to date."],
     polls: ["Polls & voting","Ask residents what they think and see the results as votes come in."],
     reports: ["Reports","Collections, occupancy, dues ageing, facility use and requests at a glance."],
     parking: ["Parking","Motor parking slots, who has one, and requests waiting for approval."],
@@ -306,10 +526,12 @@ function titles(){
     profile: ["My profile","Your administrator account, recent activity and shortcuts."]
   }[state.view];
 }
+
 function view(){
   if (state.view === "home") return viewHome();
   if (state.view === "units") return viewUnits();
   if (state.view === "fac") return viewFac();
+  if (state.view === "expenses") return viewExpenses();
   if (state.view === "fin") return viewFin();
   if (state.view === "manage") return viewManage();
   if (state.view === "ann") return viewAnn();
@@ -323,7 +545,16 @@ function view(){
   return viewReq();
 }
 
-function typeChipClass(t){ return t==="Emergency" ? "bad" : t==="Warning" ? "warn" : t==="Maintenance" ? "info" : ""; }
+function typeChipClass(t){
+  return t==="Emergency"
+    ? "bad"
+    : t==="Warning"
+      ? "warn"
+      : t==="Maintenance"
+        ? "info"
+        : "";
+}
+
 function viewAnn(){
   return `
     <div class="two-col-r" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
@@ -398,10 +629,21 @@ function viewAnn(){
 }
 
 function viewManage(){
-  const roleClass = r => r === "Board member" ? "warn" : r === "Resident" ? "good" : "good";
+  const roleClass = r =>
+    r === "Board member" ? "warn" : r === "Resident" ? "good" : "good";
+
   const mq = state.manageSearch.trim().toLowerCase();
-  const matches = t => !mq || (t.name+" "+t.email+" "+(t.unit||"")+" "+t.role).toLowerCase().indexOf(mq) >= 0;
-  const visibleTrusted = state.trusted.map((t,i)=>({t,i})).filter(x=>matches(x.t));
+
+  const matches = t =>
+    !mq ||
+    (t.name+" "+t.email+" "+(t.unit||"")+" "+t.role)
+      .toLowerCase()
+      .indexOf(mq) >= 0;
+
+  const visibleTrusted = state.trusted
+    .map((t,i)=>({t,i}))
+    .filter(x=>matches(x.t));
+
   return `
     <div class="card" style="display:flex;flex-direction:column;gap:12px">
       <h2 style="font-size:19px">Create a new account</h2>
@@ -436,7 +678,10 @@ function viewManage(){
       ${exactCSV.access ? exactTable("access") : `<table><thead><tr><th>NAME</th><th>EMAIL</th><th>PHONE</th><th>UNIT</th><th>ROLE</th><th>STATUS</th><th>ADDED</th><th>ACTION</th></tr></thead>
       <tbody>
         <tr><td style="font-weight:700">Joseph Capili</td><td style="color:var(--muted)">owner (cannot be revoked)</td><td style="color:var(--muted)">—</td><td style="color:var(--muted)">—</td><td><span class="chip info">Owner</span></td><td><span class="chip good">Active</span></td><td style="color:var(--muted)">—</td><td></td></tr>
-        ${visibleTrusted.map(x=>{const t=x.t,i=x.i; return `<tr${t.suspended?' style="opacity:.55"':''}><td style="font-weight:700">${t.name}</td><td style="color:var(--muted)">${t.email}</td><td style="color:var(--muted)">${t.phone||"—"}</td><td style="color:var(--muted)">${t.unit||"—"}</td><td><span class="chip ${roleClass(t.role)}">${t.role}</span></td><td><span class="chip ${t.suspended?"bad":"good"}">${t.suspended?"Suspended":"Active"}</span></td><td style="color:var(--muted)">${t.added}</td><td style="display:flex;gap:6px"><button class="btn" style="font-size:12px;min-height:32px;padding:0 10px" onclick="toggleSuspend(${i})">${t.suspended?"Reactivate":"Suspend"}</button><button class="btn" style="font-size:12px;min-height:32px;padding:0 10px;color:#A02B1D" onclick="revokeTrusted(${i})">Revoke</button></td></tr>`;}).join("")}
+        ${visibleTrusted.map(x=>{
+          const t=x.t,i=x.i;
+          return `<tr${t.suspended?' style="opacity:.55"':''}><td style="font-weight:700">${t.name}</td><td style="color:var(--muted)">${t.email}</td><td style="color:var(--muted)">${t.phone||"—"}</td><td style="color:var(--muted)">${t.unit||"—"}</td><td><span class="chip ${roleClass(t.role)}">${t.role}</span></td><td><span class="chip ${t.suspended?"bad":"good"}">${t.suspended?"Suspended":"Active"}</span></td><td style="color:var(--muted)">${t.added}</td><td style="display:flex;gap:6px"><button class="btn" style="font-size:12px;min-height:32px;padding:0 10px" onclick="toggleSuspend(${i})">${t.suspended?"Reactivate":"Suspend"}</button><button class="btn" style="font-size:12px;min-height:32px;padding:0 10px;color:#A02B1D" onclick="revokeTrusted(${i})">Revoke</button></td></tr>`;
+        }).join("")}
         ${(mq && visibleTrusted.length===0) ? `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No accounts match "${escAttr(state.manageSearch)}".</td></tr>` : ""}
       </tbody></table>`}
       <div style="padding:10px 18px;font-size:12px;color:var(--muted);border-top:1px solid var(--border2)">Suspend keeps the account on file but blocks sign-in; Revoke permanently removes it and asks for confirmation first.</div>
@@ -449,31 +694,72 @@ function counts(){
     unpaid: DUES.filter(d=>!state.paid[d.id]).length,
     grievances: state.gStatus.filter(s=>s<2).length,
     bookings: BOOKING_REQS.filter(r=>!state.bookAction[r.id]).length,
-    rentals: UNITS.filter(u=>(u.usage==="shortterm"||u.usage==="business") && u.usageStatus==="pending").length
+    rentals: UNITS.filter(u=>
+      (u.usage==="shortterm"||u.usage==="business") &&
+      u.usageStatus==="pending"
+    ).length
   };
 }
+
 function homeSummary(){
   const c = counts();
   return `${c.unpaid} unpaid dues, ${c.bookings} booking requests and ${c.grievances} open grievances are waiting for you today at City Residences.`;
 }
-const UPCOMING_BOOKINGS = [["Function Hall","Garcia Household","Saturday, 2:00 PM"],["Swimming Pool","Mendoza Household","Sunday, 6:00 AM"],["Function Hall","Reyes Household","October 3, 6:00 PM"]];
+
+const UPCOMING_BOOKINGS = [
+  ["Function Hall","Garcia Household","Saturday, 2:00 PM"],
+  ["Swimming Pool","Mendoza Household","Sunday, 6:00 AM"],
+  ["Function Hall","Reyes Household","October 3, 6:00 PM"]
+];
+
 function homeAside(){
-  const items = EVENTS.map(e=>[e.title, e.place, e.date]).concat(UPCOMING_BOOKINGS.map(b=>[b[0]+" booking", b[1], b[2]]));
+  const items = EVENTS
+    .map(e=>[e.title, e.place, e.date])
+    .concat(
+      UPCOMING_BOOKINGS.map(b=>[b[0]+" booking", b[1], b[2]])
+    );
+
   return asideHtml(items.slice(0,4), "Add event", "ann");
 }
+
 function viewHome(){
   const c = counts();
-  const bars = DUES.map(d=>`<i class="${state.paid[d.id]?"on":""}" style="height:${25+d.months*20}%" title="${d.unit}"></i>`).join("");
+
+  const bars = DUES.map(d=>
+    `<i class="${state.paid[d.id]?"on":""}" style="height:${25+d.months*20}%" title="${d.unit}"></i>`
+  ).join("");
+
   const quick = [
-    ["Create Announcement","ann"], ["New Poll","polls"], ["Add Finance Charge","fin"],
-    ["View Reports","reports"], ["Assign Parking","parking"], ["My Profile","profile"], ["Settings","settings"]
+    ["Create Announcement","ann"],
+    ["New Poll","polls"],
+    ["Add Finance Charge","fin"],
+    ["View Reports","reports"],
+    ["Assign Parking","parking"],
+    ["My Profile","profile"],
+    ["Settings","settings"]
   ];
-  const pendingBookings = BOOKING_REQS.filter(r=>!state.bookAction[r.id]).slice(0,2);
-  const openGr = GRIEVANCES.filter((g,i)=>state.gStatus[i]<2).slice(0,2);
-  const rows = pendingBookings.map((r,i)=>listRow(1+i%2, r.place, r.who, r.when.split(",")[0], "fac", i===0))
-    .concat(openGr.map((g,i)=>listRow(3+i%2, g.title, g.by, "Open", "req", false)));
+
+  const pendingBookings = BOOKING_REQS
+    .filter(r=>!state.bookAction[r.id])
+    .slice(0,2);
+
+  const openGr = GRIEVANCES
+    .filter((g,i)=>state.gStatus[i]<2)
+    .slice(0,2);
+
+  const rows = pendingBookings
+    .map((r,i)=>
+      listRow(1+i%2, r.place, r.who, r.when.split(",")[0], "fac", i===0)
+    )
+    .concat(
+      openGr.map((g,i)=>
+        listRow(3+i%2, g.title, g.by, "Open", "req", false)
+      )
+    );
+
   const openPolls = POLLS.filter(p=>p.open).length;
   const parkingUsed = PARKING.filter(s=>s.unit).length;
+
   return `
     <div class="sc-grid">
       ${summaryCard("yellow","Community",[["52","Units","units"],["184","Residents","units"],["5","Vendors","req"]],"cross")}
@@ -499,62 +785,161 @@ function viewHome(){
   `;
 }
 
-function rowsForExportUnits(){ return UNITS.map(u=>[u.unit,u.name,u.type,u.status,u.contact,usageLabel(u.usage)]); }
+function rowsForExportUnits(){
+  return UNITS.map(u=>[
+    u.unit,
+    u.name,
+    u.type,
+    u.status,
+    u.contact,
+    usageLabel(u.usage)
+  ]);
+}
+
 function usageLabel(usage){
-  return { owner:"Owner-occupied", tenant:"Leased (long-term)", shortterm:"Short-term rental", business:"Business use" }[usage] || "—";
+  return {
+    owner:"Owner-occupied",
+    tenant:"Leased (long-term)",
+    shortterm:"Short-term rental",
+    business:"Business use"
+  }[usage] || "—";
 }
+
 function usageChipClass(usage){
-  return (usage==="shortterm" || usage==="business") ? "warn" : usage==="tenant" ? "info" : "good";
+  return (usage==="shortterm" || usage==="business")
+    ? "warn"
+    : usage==="tenant"
+      ? "info"
+      : "good";
 }
+
 function usageCellHtml(u){
-  if (!u.usage) return `<span style="color:var(--muted)">—</span>`;
+  if (!u.usage){
+    return `<span style="color:var(--muted)">—</span>`;
+  }
+
   const needsApproval = u.usage==="shortterm" || u.usage==="business";
-  const statusText = needsApproval ? (u.usageStatus==="approved"?" · Approved":u.usageStatus==="rejected"?" · Rejected":" · Pending") : "";
+
+  const statusText = needsApproval
+    ? (
+      u.usageStatus==="approved"
+        ? " · Approved"
+        : u.usageStatus==="rejected"
+          ? " · Rejected"
+          : " · Pending"
+    )
+    : "";
+
   return `<span class="chip ${usageChipClass(u.usage)}" title="${escAttr(u.usageDetails||"")}">${usageLabel(u.usage)}${statusText}</span>`;
 }
+
+function matchesUnitSearch(content, query){
+  const normalize = value =>
+    String(value ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase();
+
+  const text = normalize(content);
+
+  return normalize(query)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every(word => text.includes(word));
+}
+
 function viewUnits(){
-  const filters = [["all","All units (52)"],["vacant","Vacant (1)"],["overdue","With overdue dues"],["flagged","Rented out / business use"]];
-  const q = state.unitSearch.trim().toLowerCase();
-  const rows = UNITS.filter(u => state.unitFilter==="all" || (state.unitFilter==="vacant"&&u.status==="Vacant") || (state.unitFilter==="overdue"&&u.overdue>0) || (state.unitFilter==="flagged"&&(u.usage==="shortterm"||u.usage==="business")))
-    .filter(u => !q || (u.unit+" "+u.name+" "+u.contact).toLowerCase().indexOf(q) >= 0);
+  const rows = UNITS.filter(u => matchesUnitSearch([
+    ...Object.values(u),
+    usageLabel(u.usage),
+    u.overdue > 0
+      ? 'overdue unpaid dues ' + u.overdue + ' months'
+      : 'settled paid dues'
+  ].join(' '), state.unitSearch));
+
+  const recordCount = exactCSV.units
+    ? csvDraft('units')
+      .slice(1)
+      .filter(r => matchesUnitSearch(r.join(' '), state.unitSearch))
+      .length
+    : rows.length;
+
   return `
-    <div class="filters">
-      ${filters.map(f=>`<button class="${state.unitFilter===f[0]?"active":""}" onclick="set({unitFilter:'${f[0]}'})">${f[1]}</button>`).join("")}
-      <input id="unitSearchInput" value="${escAttr(state.unitSearch)}" oninput="set({unitSearch:this.value})" placeholder="Search unit, name or contact..." style="height:40px;border:1px solid #CFC3A9;border-radius:999px;padding:0 16px;font-size:13px;min-width:220px">
-      <span style="margin-left:auto;font-size:13px;color:var(--muted)">${rows.length} units on record</span>
+    <div class="unit-search-panel">
+      <label for="unitSearchInput">Search units &amp; residents</label>
+      <input type="search" id="unitSearchInput" value="${escAttr(state.unitSearch)}" oninput="set({unitSearch:this.value})" placeholder="Search unit, resident, contact, status, usage or dues..." aria-describedby="unitSearchHelp" autocomplete="off">
+      <p id="unitSearchHelp">Search any record information. Combine words, such as “Reyes owner” or “vacant overdue”.</p>
+    </div>
+    <div class="filters unit-actions">
+      <span role="status" style="margin-right:auto;font-size:13px;color:var(--muted)">${recordCount} matching ${recordCount===1?'unit':'units'}</span>
       <label class="btn file-import-btn">Import CSV<input type="file" accept=".csv,text/csv" onchange="importFile('units',this)" hidden></label>
       <button class="btn" onclick="downloadImportTemplate('units')">Template</button>
       <button class="btn primary" onclick='exportCSV("units.csv",["Unit","Resident/Owner","Occupancy","Status","Contact","Usage"],rowsForExportUnits())'>Export CSV</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       ${exactCSV.units ? exactTable("units") : `<table><thead><tr><th>UNIT</th><th>RESIDENT / OWNER</th><th>OCCUPANCY</th><th>STATUS</th><th>CONTACT</th><th>USAGE</th><th></th></tr></thead>
-      <tbody>${rows.map(u=>`<tr><td style="font-weight:700">${u.unit}</td><td>${u.name}</td><td style="color:var(--muted)">${u.type}</td><td><span class="chip ${u.status==="Vacant"?"warn":"good"}">${u.status}</span></td><td style="color:var(--muted)">${u.contact}</td><td>${usageCellHtml(u)}</td><td><button class="btn" style="min-height:34px;padding:0 14px;font-size:12.5px" onclick="showUnit('${u.unit}')">View</button></td></tr>`).join("")}</tbody></table>`}
+      <tbody>${rows.map(u=>`<tr><td style="font-weight:700">${u.unit}</td><td>${u.name}</td><td style="color:var(--muted)">${u.type}</td><td><span class="chip ${u.status==="Vacant"?"warn":"good"}">${u.status}</span></td><td style="color:var(--muted)">${u.contact}</td><td>${usageCellHtml(u)}</td><td><button class="btn" style="min-height:34px;padding:0 14px;font-size:12.5px" onclick="showUnit('${u.unit}')">View</button></td></tr>`).join("")}${rows.length ? "" : `<tr><td colspan="7" class="unit-empty">No units match your search.</td></tr>`}</tbody></table>`}
     </div>
   `;
 }
 
 function viewFac(){
-  return `<div class="facility-today-grid">${FACILITIES.map((f,i)=>`<div class="card"><h2>${escAttr(f.name)} · Availability today</h2><p class="hint">${escAttr(f.hours)} · Select a slot to change availability</p>${i===0?'<p class="hint">Residents enter free; guests pay ₱150 per visit.</p>':''}<div class="slots">${SLOT_TIMES.map((t,j)=>{const booked=BASE_BOOKED[i].includes(j)!==!!state.blocked[i+'-'+j];return `<button class="slot ${booked?'booked':'open'}" onclick="set({facIdx:${i}});toggleSlot(${j})"><b>${t}</b><span>${booked?'Booked':'Open'}</span></button>`}).join('')}</div></div>`).join('')}</div>`;
+  return `<div class="facility-today-grid">${FACILITIES.map((f,i)=>`<div class="card"><h2>${escAttr(f.name)} · Availability today</h2><p class="hint">${escAttr(f.hours)} · Select a slot to change availability</p>${i===0?'<p class="hint">Residents enter free; guests pay ₱150 per visit.</p>':''}<div class="slots">${SLOT_TIMES.map((t,j)=>{
+    const booked=BASE_BOOKED[i].includes(j)!==!!state.blocked[i+'-'+j];
+    return `<button class="slot ${booked?'booked':'open'}" onclick="set({facIdx:${i}});toggleSlot(${j})"><b>${t}</b><span>${booked?'Booked':'Open'}</span></button>`;
+  }).join('')}</div></div>`).join('')}</div>`;
 }
 
-function toggleSlot(idx){ const key = state.facIdx+"-"+idx; state.blocked[key] = !state.blocked[key]; render(); }
-function bookAct(id,action){ logAct((action==="approve"?"Approved":"Denied")+" the "+BOOKING_REQS.find(r=>r.id===id).place+" booking for "+BOOKING_REQS.find(r=>r.id===id).who); state.bookAction[id] = action; render(); }
+function toggleSlot(idx){
+  const key = state.facIdx+"-"+idx;
+  state.blocked[key] = !state.blocked[key];
+  render();
+}
+
+function bookAct(id,action){
+  logAct(
+    (action==="approve"?"Approved":"Denied")+
+    " the "+
+    BOOKING_REQS.find(r=>r.id===id).place+
+    " booking for "+
+    BOOKING_REQS.find(r=>r.id===id).who
+  );
+
+  state.bookAction[id] = action;
+  render();
+}
 
 function updateMotorParkingRate(){
   const n = parseFloat(state.motorParkingRateDraft);
-  if (isNaN(n) || n < 0) { set({ rateToast: "Enter a valid amount before updating the rate." }); return; }
+
+  if (isNaN(n) || n < 0){
+    set({ rateToast: "Enter a valid amount before updating the rate." });
+    return;
+  }
+
   state.motorParkingRate = n;
   logAct("Updated motor parking rate to "+peso(n)+"/month");
   state.motorParkingRateDraft = String(n);
-  set({ rateToast: `Motor parking rental rate updated to ${peso(n)}/month.` });
+
+  set({
+    rateToast: `Motor parking rental rate updated to ${peso(n)}/month.`
+  });
 }
-function dismissRateToast(){ set({ rateToast:"" }); }
+
+function dismissRateToast(){
+  set({ rateToast:"" });
+}
 
 function viewRentals(){
-  const flagged = UNITS.filter(u=>u.usage==="shortterm"||u.usage==="business");
+  const flagged = UNITS.filter(u=>
+    u.usage==="shortterm"||u.usage==="business"
+  );
+
   const pending = flagged.filter(u=>u.usageStatus==="pending").length;
   const approved = flagged.filter(u=>u.usageStatus==="approved").length;
   const rejected = flagged.filter(u=>u.usageStatus==="rejected").length;
+
   return `
     <div class="grid cols-3">
       <div class="card"><div class="stat-label">Awaiting review</div><div class="stat-value">${pending}</div></div>
@@ -566,7 +951,12 @@ function viewRentals(){
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
       ${flagged.length===0 ? `<div class="card" style="text-align:center;color:var(--muted)">No units have declared a short-term rental or business use yet.</div>` : flagged.map(u=>{
-        const statusChip = u.usageStatus==="approved" ? `<span class="chip good">Approved</span>` : u.usageStatus==="rejected" ? `<span class="chip bad">Rejected</span>` : `<span class="chip warn">Pending review</span>`;
+        const statusChip = u.usageStatus==="approved"
+          ? `<span class="chip good">Approved</span>`
+          : u.usageStatus==="rejected"
+            ? `<span class="chip bad">Rejected</span>`
+            : `<span class="chip warn">Pending review</span>`;
+
         return `<div class="card" style="display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
             <div><span style="font-weight:700;font-size:16px">${u.unit}</span><span style="color:var(--muted);font-size:13px"> · ${u.name}</span></div>
@@ -584,25 +974,59 @@ function viewRentals(){
     </div>
   `;
 }
+
 function rentalAct(unit, decision){
   const u = UNITS.find(x=>x.unit===unit);
   if (!u) return;
-  const noteEl = document.getElementById("rentalNote-"+unit.replace(/\s+/g,''));
+
+  const noteEl = document.getElementById(
+    "rentalNote-"+unit.replace(/\s+/g,'')
+  );
+
   const note = noteEl ? noteEl.value.trim() : "";
+
   u.usageStatus = decision;
-  logAct((decision==="approved"?"Approved":"Rejected")+" unit usage declaration for "+unit);
-  u.usageRemark = decision==="rejected" ? (note || "Not approved at this time — please contact the office.") : "";
+
+  logAct(
+    (decision==="approved"?"Approved":"Rejected")+
+    " unit usage declaration for "+
+    unit
+  );
+
+  u.usageRemark = decision==="rejected"
+    ? (note || "Not approved at this time — please contact the office.")
+    : "";
+
   try {
-    const existing = JSON.parse(localStorage.getItem("residenthub_unit_usage") || "{}");
-    const key = Object.keys(existing).find(function(k){ return k.split(" · ")[0] === unit; }) || unit;
-    existing[key] = Object.assign({}, existing[key], { usage:u.usage, details:u.usageDetails, status:u.usageStatus, remark:u.usageRemark });
-    localStorage.setItem("residenthub_unit_usage", JSON.stringify(existing));
-  } catch(e){ /* storage unavailable — admin-side status still updates */ }
+    const existing = JSON.parse(
+      localStorage.getItem("residenthub_unit_usage") || "{}"
+    );
+
+    const key = Object.keys(existing).find(function(k){
+      return k.split(" · ")[0] === unit;
+    }) || unit;
+
+    existing[key] = Object.assign({}, existing[key], {
+      usage:u.usage,
+      details:u.usageDetails,
+      status:u.usageStatus,
+      remark:u.usageRemark
+    });
+
+    localStorage.setItem(
+      "residenthub_unit_usage",
+      JSON.stringify(existing)
+    );
+  } catch(e){
+    /* storage unavailable — admin-side status still updates */
+  }
+
   render();
 }
 
 function viewReq(){
   const stepNames = ["Open","In progress","Resolved"];
+
   return `
     <div class="grid cols-3">
       ${GRIEVANCES.map((g,i)=>{
@@ -624,54 +1048,580 @@ function viewReq(){
         </div>
         ${DOCS.map((d,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:0 18px;height:50px;border-top:1px solid var(--border2);font-size:14px"><span style="flex-grow:1;font-weight:700">${d.name}</span><span style="color:var(--muted)">${d.cat}</span><span style="color:var(--muted)">${d.date}</span><button class="btn" style="min-height:32px;padding:0 10px;font-size:12px;color:#A02B1D" onclick="removeDoc(${i})">Remove</button></div>`).join("")}
       </div>
-
     </div>
   `;
 }
-function advanceGr(i){ logAct("Moved grievance “"+GRIEVANCES[i].title+"” forward"); state.gStatus[i] = Math.min(2, state.gStatus[i]+1); render(); }
+
+function advanceGr(i){
+  logAct("Moved grievance “"+GRIEVANCES[i].title+"” forward");
+  state.gStatus[i] = Math.min(2, state.gStatus[i]+1);
+  render();
+}
+
 function uploadDoc(e){
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const today = new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"});
+
+  const today = new Date().toLocaleDateString("en-US", {
+    month:"short",
+    day:"numeric"
+  });
+
   logAct("Uploaded document “"+file.name+"”");
-  DOCS.unshift({ name: file.name, cat: "Uploaded", date: "Uploaded " + today });
+
+  DOCS.unshift({
+    name: file.name,
+    cat: "Uploaded",
+    date: "Uploaded " + today
+  });
+
   render();
 }
-function removeDoc(i){ DOCS.splice(i,1); render(); }
+
+function removeDoc(i){
+  DOCS.splice(i,1);
+  render();
+}
+
 function addVendor(){
   if (!state.newVendor || !state.newVendor.trim()) return;
   VENDORS.push(state.newVendor.trim());
   set({ newVendor:"" });
 }
-function removeVendor(i){ VENDORS.splice(i,1); render(); }
 
-// Interactive buttons: ripple + press feedback on every .btn. Delegated on
-// document (not attached per-button) so it keeps working after render()
-// rebuilds the DOM, since this app's whole UI is re-rendered on every action.
+function removeVendor(i){
+  VENDORS.splice(i,1);
+  render();
+}
+
+// Interactive buttons: ripple + press feedback on every .btn.
+// Delegated on document so it keeps working after render().
 (function(){
   document.addEventListener("pointerdown", function(e){
     var btn = e.target.closest(".btn");
     if (btn) btn.classList.add("is-pressed");
   });
+
   ["pointerup","pointerleave"].forEach(function(ev){
     document.addEventListener(ev, function(e){
       var btn = e.target.closest(".btn");
       if (btn) btn.classList.remove("is-pressed");
     });
   });
+
   document.addEventListener("click", function(e){
     var btn = e.target.closest(".btn");
     if (!btn) return;
+
     var rect = btn.getBoundingClientRect();
     var size = Math.max(rect.width, rect.height) * 1.6;
     var ripple = document.createElement("span");
+
     ripple.className = "btn-ripple";
     ripple.style.width = ripple.style.height = size + "px";
     ripple.style.left = (e.clientX - rect.left - size / 2) + "px";
     ripple.style.top = (e.clientY - rect.top - size / 2) + "px";
+
     btn.appendChild(ripple);
-    ripple.addEventListener("animationend", function(){ ripple.remove(); });
+
+    ripple.addEventListener("animationend", function(){
+      ripple.remove();
+    });
   });
 })();
+
+/* ---------- Expenses: real entries, stored on this browser ---------- */
+const EXPENSE_KEY = 'residenthub_admin_expenses_v1';
+
+const EXPENSE_CATEGORIES = [
+  'Maintenance',
+  'Utilities',
+  'Security',
+  'Supplies',
+  'Administration',
+  'Other'
+];
+
+function expenseToday(){
+  const d = new Date();
+
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function expenseValidDate(value){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const d = new Date(value+'T12:00:00');
+
+  return !isNaN(d) &&
+    d.getFullYear() === Number(value.slice(0,4)) &&
+    d.getMonth()+1 === Number(value.slice(5,7)) &&
+    d.getDate() === Number(value.slice(8,10));
+}
+
+function expenseEscape(value){
+  return String(value).replace(/[&<>"']/g, c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+}
+
+function expenseMoney(cents){
+  return new Intl.NumberFormat('en-PH', {
+    style:'currency',
+    currency:'PHP'
+  }).format(cents/100);
+}
+
+const expenseState = {
+  entries:[],
+  month:expenseToday().slice(0,7),
+  day:expenseToday(),
+  editing:null,
+  notice:'',
+  blocked:false
+};
+
+try {
+  const saved = localStorage.getItem(EXPENSE_KEY);
+
+  if (saved !== null){
+    const rows = JSON.parse(saved);
+
+    if (
+      !Array.isArray(rows) ||
+      rows.some(r =>
+        !r ||
+        typeof r.id !== 'string' ||
+        !expenseValidDate(r.date) ||
+        typeof r.description !== 'string' ||
+        !r.description.trim() ||
+        !EXPENSE_CATEGORIES.includes(r.category) ||
+        !Number.isSafeInteger(r.cents) ||
+        r.cents <= 0
+      ) ||
+      new Set(rows.map(r=>r.id)).size !== rows.length
+    ){
+      throw new Error('Invalid expense records');
+    }
+
+    expenseState.entries = rows;
+  }
+} catch(e){
+  expenseState.blocked = true;
+  expenseState.notice = 'Saved expenses could not be loaded. Check browser storage before adding entries; existing data has not been overwritten.';
+}
+
+function expenseCommit(entries){
+  if (expenseState.blocked) return false;
+
+  if (!Number.isSafeInteger(
+    entries.reduce((sum,r)=>sum+r.cents,0)
+  )){
+    expenseState.notice = 'The combined expense amount is too large.';
+    return false;
+  }
+
+  try {
+    localStorage.setItem(EXPENSE_KEY, JSON.stringify(entries));
+    expenseState.entries = entries;
+    return true;
+  } catch(e){
+    expenseState.notice = 'Unable to save. Browser storage may be full or disabled. Your previous records are unchanged.';
+    return false;
+  }
+}
+
+function expenseMonthlyRows(){
+  return expenseState.entries
+    .filter(r=>r.date.slice(0,7)===expenseState.month)
+    .sort((a,b)=>
+      b.date.localeCompare(a.date) ||
+      a.id.localeCompare(b.id)
+    );
+}
+
+function expenseSummary(rows){
+  return rows.reduce((out,r)=>{
+    out.total += r.cents;
+    out.days[r.date] = (out.days[r.date]||0) + r.cents;
+    return out;
+  }, {
+    total:0,
+    days:{}
+  });
+}
+
+function viewExpenses(){
+  const rows = expenseMonthlyRows();
+  const summary = expenseSummary(rows);
+
+  const editing = expenseState.entries.find(
+    r=>r.id===expenseState.editing
+  );
+
+  const dayTotal = expenseState.entries
+    .filter(r=>r.date===expenseState.day)
+    .reduce((sum,r)=>sum+r.cents,0);
+
+  const field = editing || {
+    date:expenseToday(),
+    description:'',
+    category:'Maintenance',
+    cents:0
+  };
+
+  return `
+    <div class="expense-toolbar">
+      <label>
+        Report month
+        <input
+          id="expenseMonth"
+          type="month"
+          value="${expenseState.month}"
+          onchange="expenseChangeMonth(this.value)"
+        >
+      </label>
+      <button
+        class="btn"
+        onclick="expenseExport()"
+        ${rows.length?'':'disabled'}
+      >Export month CSV</button>
+    </div>
+
+    <div class="expense-stats">
+      <div class="card">
+        <div class="stat-label">Monthly expenses</div>
+        <div class="stat-value">${expenseMoney(summary.total)}</div>
+        <p>${rows.length} expense ${rows.length===1?'entry':'entries'} in ${expenseState.month}</p>
+      </div>
+
+      <div class="card">
+        <label class="stat-label" for="expenseDay">Daily expenses</label>
+        <input
+          id="expenseDay"
+          type="date"
+          value="${expenseState.day}"
+          onchange="expenseState.day=this.value;render()"
+        >
+        <div class="stat-value">${expenseMoney(dayTotal)}</div>
+      </div>
+    </div>
+
+    ${expenseState.notice ? `
+      <p class="expense-notice" role="status">
+        ${expenseEscape(expenseState.notice)}
+      </p>
+    ` : ''}
+
+    <div class="card expense-form-card">
+      <h2>${editing?'Edit expense':'Record daily expense'}</h2>
+
+      <form id="expenseForm" onsubmit="expenseSave(event)">
+        <div class="expense-fields">
+          <label>
+            Date
+            <input
+              name="date"
+              type="date"
+              required
+              value="${field.date}"
+            >
+          </label>
+
+          <label>
+            Category
+            <select name="category">
+              ${EXPENSE_CATEGORIES.map(c=>`
+                <option ${field.category===c?'selected':''}>${c}</option>
+              `).join('')}
+            </select>
+          </label>
+
+          <label>
+            Description
+            <input
+              name="description"
+              required
+              maxlength="200"
+              value="${expenseEscape(field.description)}"
+              placeholder="e.g. Elevator maintenance"
+            >
+          </label>
+
+          <label>
+            Amount (₱)
+            <input
+              name="amount"
+              type="number"
+              required
+              min="0.01"
+              max="999999999.99"
+              step="0.01"
+              value="${field.cents?(field.cents/100).toFixed(2):''}"
+              placeholder="0.00"
+            >
+          </label>
+        </div>
+
+        <div class="expense-form-actions">
+          <button
+            class="btn primary"
+            type="submit"
+            ${expenseState.blocked?'disabled':''}
+          >${editing?'Save changes':'Add expense'}</button>
+
+          ${editing ? `
+            <button
+              class="btn"
+              type="button"
+              onclick="expenseState.editing=null;render()"
+            >Cancel</button>
+          ` : ''}
+
+          <span class="hint">
+            Saved on this browser. Export a CSV to keep a backup.
+          </span>
+        </div>
+      </form>
+    </div>
+
+    <div class="card expense-table">
+      <h2>Expenses · ${expenseState.month}</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${rows.map(r=>`
+            <tr>
+              <td>${r.date}</td>
+              <td>${expenseEscape(r.category)}</td>
+              <td>${expenseEscape(r.description)}</td>
+              <td class="expense-amount">${expenseMoney(r.cents)}</td>
+              <td>
+                <button
+                  type="button"
+                  class="btn"
+                  data-expense-edit="${expenseEscape(r.id)}"
+                >Edit</button>
+                <button
+                  type="button"
+                  class="btn"
+                  data-expense-delete="${expenseEscape(r.id)}"
+                >Delete</button>
+              </td>
+            </tr>
+          `).join('') || `
+            <tr>
+              <td colspan="5">
+                No expenses recorded for this month. Add your first expense above.
+              </td>
+            </tr>
+          `}
+        </tbody>
+
+        <tfoot>
+          <tr>
+            <th colspan="3">Monthly total</th>
+            <th class="expense-amount">${expenseMoney(summary.total)}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="card expense-table">
+      <h2>Daily totals · ${expenseState.month}</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Total expenses</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${Object.keys(summary.days)
+            .sort()
+            .reverse()
+            .map(day=>`
+              <tr>
+                <td>${day}</td>
+                <td>${expenseMoney(summary.days[day])}</td>
+              </tr>
+            `).join('') || `
+              <tr>
+                <td colspan="2">No daily totals yet.</td>
+              </tr>
+            `}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function expenseChangeMonth(month){
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return;
+
+  expenseState.month = month;
+  expenseState.day = month===expenseToday().slice(0,7)
+    ? expenseToday()
+    : month+'-01';
+
+  expenseState.notice = '';
+  render();
+}
+
+function expenseSave(event){
+  event.preventDefault();
+
+  const form = event.target;
+  const data = new FormData(form);
+  const date = String(data.get('date'));
+  const description = String(data.get('description')).trim();
+  const category = String(data.get('category'));
+  const amount = String(data.get('amount'));
+
+  if (
+    !expenseValidDate(date) ||
+    !description ||
+    description.length>200 ||
+    !EXPENSE_CATEGORIES.includes(category) ||
+    !/^\d+(\.\d{1,2})?$/.test(amount) ||
+    Number(amount)<=0 ||
+    Number(amount)>999999999.99
+  ){
+    expenseState.notice = 'Enter a valid date, description, category, and positive amount with up to two decimal places.';
+    render();
+    return;
+  }
+
+  const parts = amount.split('.');
+  const cents =
+    Number(parts[0])*100 +
+    Number((parts[1]||'').padEnd(2,'0'));
+
+  const id = expenseState.editing || (
+    globalThis.crypto?.randomUUID?.() ||
+    Date.now().toString(36)+Math.random().toString(36).slice(2)
+  );
+
+  const entry = {
+    id,
+    date,
+    description,
+    category,
+    cents
+  };
+
+  const rows = expenseState.editing
+    ? expenseState.entries.map(r=>r.id===id?entry:r)
+    : [...expenseState.entries,entry];
+
+  if (!expenseCommit(rows)){
+    const notice = document.createElement('p');
+    notice.className = 'expense-notice';
+    notice.setAttribute('role','alert');
+    notice.textContent = expenseState.notice;
+    form.appendChild(notice);
+    return;
+  }
+
+  expenseState.editing = null;
+  expenseState.month = date.slice(0,7);
+  expenseState.day = date;
+  expenseState.notice = 'Expense saved.';
+  render();
+}
+
+document.addEventListener('click', event=>{
+  const edit = event.target.closest('[data-expense-edit]');
+  const del = event.target.closest('[data-expense-delete]');
+
+  if (edit){
+    expenseState.editing = edit.dataset.expenseEdit;
+    expenseState.notice = '';
+    render();
+    document.querySelector('#expenseForm input')?.focus();
+  }
+
+  if (
+    del &&
+    confirm('Delete this expense? Monthly and daily totals will be updated.')
+  ){
+    if (expenseCommit(
+      expenseState.entries.filter(
+        r=>r.id!==del.dataset.expenseDelete
+      )
+    )){
+      if (expenseState.editing===del.dataset.expenseDelete){
+        expenseState.editing = null;
+      }
+
+      expenseState.notice = 'Expense deleted.';
+    }
+
+    render();
+  }
+});
+
+function expenseExport(){
+  const rows = expenseMonthlyRows();
+  if (!rows.length) return;
+
+  const quote = value =>
+    '"' +
+    String(value)
+      .replace(/^[=+@\-\t\r]/,"'$&")
+      .replace(/"/g,'""') +
+    '"';
+
+  const csv = [
+    ['Date','Category','Description','Amount (PHP)'],
+    ...rows.map(r=>[
+      r.date,
+      r.category,
+      r.description,
+      (r.cents/100).toFixed(2)
+    ]),
+    [
+      '',
+      '',
+      'Monthly total',
+      (expenseSummary(rows).total/100).toFixed(2)
+    ]
+  ]
+    .map(row=>row.map(quote).join(','))
+    .join('\r\n');
+
+  const url = URL.createObjectURL(
+    new Blob(['\uFEFF'+csv], {
+      type:'text/csv;charset=utf-8;'
+    })
+  );
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'expenses-'+expenseState.month+'.csv';
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 
 render();
