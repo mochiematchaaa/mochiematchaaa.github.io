@@ -394,7 +394,7 @@ function exactTable(kind){
       <button class="btn csv-edit-toggle" onclick="csvEdit('${kind}')">Edit</button>
       <button class="btn primary" onclick="csvSave('${kind}')">Save changes</button></div></div>
     <div class="csv-scroll"><table><thead><tr>${draft[0].map(v=>`<th>${csvHtml(v)}</th>`).join('')}<th>Actions</th></tr></thead>
-    <tbody>${draft.slice(1).map((r,ri)=>`<tr>${r.map((v,ci)=>`<td><input class="csv-cell-input" aria-label="Row ${ri+1}, column ${ci+1}" value="${csvHtml(v)}" oninput="csvChange('${kind}',${ri+1},${ci},this.value)" readonly></td>`).join('')}<td><button class="btn csv-remove-row" hidden onclick="csvRemove('${kind}',${ri+1})">Remove</button></td></tr>`).join('')}</tbody></table></div></div>`;
+    <tbody>${draft.slice(1).map((r,ri)=>({r,ri})).filter(({r})=>kind!=='units'||matchesUnitSearch(r.join(' '),state.unitSearch)).map(({r,ri})=>`<tr>${r.map((v,ci)=>`<td><input class="csv-cell-input" aria-label="Row ${ri+1}, column ${ci+1}" value="${csvHtml(v)}" oninput="csvChange('${kind}',${ri+1},${ci},this.value)" readonly></td>`).join('')}<td><button class="btn csv-remove-row" hidden onclick="csvRemove('${kind}',${ri+1})">Remove</button></td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function downloadImportTemplate(kind){
   if(kind==='units')exportCSV('units-template.csv',['Unit','Resident/Owner','Occupancy','Status','Contact','Usage'],[['Unit 1A','Example Resident','Owner','Occupied','09170000000','owner']]);
