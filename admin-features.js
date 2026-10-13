@@ -255,6 +255,7 @@ function viewFin(){
     : `<p class="hint" style="margin:6px 0 0">No payments recorded yet. Pick a unit in the payment desk and record one.</p>`;
   return `
     <div class="grid cols-4">${stats.map(s=>`<div class="card"><div class="stat-label">${s[0]}</div><div class="stat-value">${s[1]}</div></div>`).join("")}</div>
+    ${adminProofsHtml()}
     ${state.rateToast ? `<div class="card" style="margin-top:16px;background:var(--good-bg);border-color:#B9D6B4;color:var(--good-fg);display:flex;justify-content:space-between;align-items:center;gap:10px">
       <span style="font-size:13px;font-weight:600">${state.rateToast}</span>
       <button class="btn" style="min-height:30px;padding:0 10px;font-size:12px" onclick="dismissRateToast()">Dismiss</button>
@@ -473,5 +474,40 @@ function viewProfile(){
           <button class="btn" onclick="set({view:'settings'})">Settings</button>
         </div>
       </aside>
+    </div>`;
+}
+
+
+/* ---------- Payments to verify and receipts (see payments.js) ---------- */
+function confirmProof(id){
+  const p = reviewProof(id, true);
+  if (!p) return;
+  // Mirror it in the ledger and mark the matching unpaid unit as paid.
+  const d = DUES.find(x => x.unit === p.unit && !state.paid[x.id]);
+  if (d) state.paid[d.id] = true;
+  state.paymentHistory.unshift({ ref:p.reference, unit:p.unit, name:p.payer, amount:p.amount, date:new Date().toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) });
+  logAct("Confirmed payment from " + p.unit + " (" + peso(p.amount) + "), receipt " + p.receiptNo);
+  render(); toast("Payment confirmed. Receipt " + p.receiptNo + " is ready for " + p.unit + ".");
+}
+function rejectProof(id){
+  const p = reviewProof(id, false);
+  if (!p) return;
+  logAct("Rejected payment details from " + p.unit + " (ref " + p.reference + ")");
+  render(); toast("Payment details rejected. The resident will see this.");
+}
+function adminProofsHtml(){
+  const all = readProofs();
+  const pending = all.filter(p => p.status === "Pending");
+  const issued = all.filter(p => p.status === "Confirmed");
+  const row = p => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line,#E7E2D6)">
+      <div style="min-width:0"><b>${payEsc(p.unit)} · ${payEsc(p.payer)}</b><div style="font-size:12.5px;color:var(--muted)">${payEsc(p.forText)} · ${payEsc(p.method)} · Ref ${payEsc(p.reference)} · ${peso(p.amount)} · ${payEsc(p.date)}</div></div>
+      <div style="display:flex;gap:8px"><button class="btn" onclick="rejectProof(${p.id})">Reject</button><button class="btn primary" onclick="confirmProof(${p.id})">Confirm</button></div>
+    </div>`;
+  return `<div class="card" style="margin-top:16px">
+      <h2>Payments to verify</h2>
+      <p class="hint">Residents pay at the office, by bank, GCash or Maya, then send the amount, method and reference number. Check them against your records, then confirm to issue a receipt.</p>
+      ${pending.length ? pending.map(row).join("") : `<p class="hint" style="margin:6px 0 0">Nothing waiting. New submissions from residents appear here right away.</p>`}
+      ${issued.length ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px"><b>Receipts issued (${issued.length})</b><button class="btn" onclick="exportPaymentHistoryCSV(readProofs().filter(p=>p.status==='Confirmed'))">Export to Excel (.csv)</button></div>
+      ${issued.slice(0,5).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line,#E7E2D6)"><span style="font-size:13px"><b>${payEsc(p.receiptNo)}</b> · ${payEsc(p.unit)} · ${peso(p.amount)}</span><button class="btn" style="min-height:30px;padding:0 10px;font-size:12px" onclick="downloadReceipt(${p.id})">Receipt</button></div>`).join("")}` : ""}
     </div>`;
 }
