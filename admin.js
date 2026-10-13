@@ -919,6 +919,7 @@ function updateMotorParkingRate(){
   }
 
   state.motorParkingRate = n;
+  if (typeof saveParking === "function") saveParking();
   logAct("Updated motor parking rate to "+peso(n)+"/month");
   state.motorParkingRateDraft = String(n);
 

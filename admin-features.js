@@ -127,6 +127,16 @@ function downloadReport(){
 const PARKING_UNITS = ["Unit 12A","Unit 7C","Unit 3B","Unit 15D","Unit 9A","Unit 21B","Unit 18C","Unit 6B","Unit 2A","Unit 8C","Unit 10D","Unit 14A","Unit 17B"];
 const PARKING = Array.from({ length: 24 }, (_, i) => ({ id: "M-" + String(i + 1).padStart(2, "0"), unit: PARKING_UNITS[i] || "" }));
 let PARKING_REQUESTS = [{ unit:"Unit 4D", who:"Reyes-Torres Household", when:"2 days ago" },{ unit:"Unit 11B", who:"Fernandez Household", when:"Yesterday" }];
+/* Load what is saved (residents add requests from their own page) and save every change. */
+function hydrateParking(){
+  const p = readParking();
+  p.slots.forEach((u,i) => { PARKING[i].unit = u; });
+  PARKING_REQUESTS = p.requests;
+  state.motorParkingRate = p.rate;
+  state.motorParkingRateDraft = String(p.rate);
+}
+function saveParking(){ writeParking({ slots: PARKING.map(s => s.unit), requests: PARKING_REQUESTS, rate: state.motorParkingRate }); }
+hydrateParking();
 function viewParking(){
   const used = PARKING.filter(s=>s.unit).length;
   return `
@@ -154,15 +164,15 @@ function openSlot(i){
     openModal(`<h2>${s.id}</h2><p>This slot is free. Choose a unit to assign it to.</p><label class="fl">Unit<select id="pkUnit">${choices.map(u=>`<option>${u}</option>`).join("")}</select></label><div class="modal-actions"><button class="btn primary" onclick="assignSlot(${i})">Assign slot</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   }
 }
-function assignSlot(i){ const u = document.getElementById("pkUnit").value; PARKING[i].unit = u; logAct("Assigned parking slot "+PARKING[i].id+" to "+u); closeModal(); render(); toast(PARKING[i].id+" assigned to "+u+"."); }
-function releaseSlot(i){ logAct("Released parking slot "+PARKING[i].id+" from "+PARKING[i].unit); PARKING[i].unit = ""; closeModal(); render(); toast("Slot released."); }
+function assignSlot(i){ const u = document.getElementById("pkUnit").value; PARKING[i].unit = u; saveParking(); logAct("Assigned parking slot "+PARKING[i].id+" to "+u); closeModal(); render(); toast(PARKING[i].id+" assigned to "+u+"."); }
+function releaseSlot(i){ logAct("Released parking slot "+PARKING[i].id+" from "+PARKING[i].unit); PARKING[i].unit = ""; saveParking(); closeModal(); render(); toast("Slot released."); }
 function approveParking(k){
   const free = PARKING.find(s=>!s.unit);
   if (!free){ toast("There are no free slots right now."); return; }
   free.unit = PARKING_REQUESTS[k].unit; logAct("Assigned parking slot "+free.id+" to "+free.unit);
-  toast(free.id+" assigned to "+free.unit+"."); PARKING_REQUESTS.splice(k,1); render();
+  toast(free.id+" assigned to "+free.unit+"."); PARKING_REQUESTS.splice(k,1); saveParking(); render();
 }
-function declineParking(k){ logAct("Declined a parking request from "+PARKING_REQUESTS[k].unit); PARKING_REQUESTS.splice(k,1); render(); }
+function declineParking(k){ logAct("Declined a parking request from "+PARKING_REQUESTS[k].unit); PARKING_REQUESTS.splice(k,1); saveParking(); render(); }
 
 /* ---------- Settings ---------- */
 function viewSettings(){
