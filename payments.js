@@ -9,7 +9,6 @@
 
 const PAY_METHODS = ["Office (cash)", "Bank transfer", "GCash", "Maya"];
 const PAY_KEY = "residenthub_payment_proofs_v1";
-const PAY_SEQ_KEY = "residenthub_receipt_seq_v1";
 
 function readProofs(){
   try { const v = JSON.parse(localStorage.getItem(PAY_KEY) || "[]"); return Array.isArray(v) ? v : []; }
@@ -18,10 +17,11 @@ function readProofs(){
 function writeProofs(list){
   try { localStorage.setItem(PAY_KEY, JSON.stringify(list)); } catch(err){ /* storage unavailable */ }
 }
-function nextReceiptNo(){
-  let n = 1;
-  try { n = (parseInt(localStorage.getItem(PAY_SEQ_KEY) || "0", 10) || 0) + 1; localStorage.setItem(PAY_SEQ_KEY, String(n)); } catch(err){ n = Date.now() % 10000; }
-  return "OR-2026-" + String(n).padStart(4, "0");
+function nextReceiptNo(list){
+  /* Counted from the shared list, so two devices never issue the same number. */
+  let max = 0;
+  (list || readProofs()).forEach(p => { const m = /^OR-2026-(\d+)$/.exec(p.receiptNo || ""); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return "OR-2026-" + String(max + 1).padStart(4, "0");
 }
 function payDate(){
   return new Date().toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
@@ -57,7 +57,7 @@ function reviewProof(id, confirm){
   const p = list.find(x => x.id === id);
   if (!p || p.status !== "Pending") return null;
   p.status = confirm ? "Confirmed" : "Rejected";
-  if (confirm){ p.receiptNo = nextReceiptNo(); p.confirmedOn = payDate(); }
+  if (confirm){ p.receiptNo = nextReceiptNo(list); p.confirmedOn = payDate(); }
   writeProofs(list);
   return p;
 }
