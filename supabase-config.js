@@ -8,6 +8,6 @@
 
    While both stay empty the website works on its own, saving data in this browser only. */
 window.RH_SUPABASE = {
-  url: "",
-  anonKey: ""
+  url: "https://iexsitqmmhokmffmmaed.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlleHNpdHFtbWhva21mZm1tYWVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4OTgzNDEsImV4cCI6MjEwNzQ3NDM0MX0.g1-1z0XOp0RpFot_OP06_1_6nPPvueyqArVtP3qYcwc"
 };
