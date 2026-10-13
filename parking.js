@@ -8,7 +8,7 @@ const PARK_SEED_UNITS = ["Unit 12A","Unit 7C","Unit 3B","Unit 15D","Unit 9A","Un
 function parkDefault(){
   return {
     slots: Array.from({ length: 24 }, (_, i) => PARK_SEED_UNITS[i] || ""),
-    requests: [{ unit:"Unit 4D", who:"Reyes-Torres Household", when:"2 days ago" }, { unit:"Unit 11B", who:"Fernandez Household", when:"Yesterday" }],
+    requests: [{ unit:"Unit 4D", who:"Reyes-Torres Household", when:"2 days ago", at:1 }, { unit:"Unit 11B", who:"Fernandez Household", when:"Yesterday", at:2 }],
     rate: 500
   };
 }
@@ -31,7 +31,7 @@ function requestParkingSlot(unit, who){
   const p = readParking();
   if (p.slots.indexOf(unit) >= 0) return "Your unit already has a slot.";
   if (p.requests.some(r => r.unit === unit)) return "You already sent a request.";
-  p.requests.push({ unit: unit, who: who, when: "Just now" });
+  p.requests.push({ unit: unit, who: who, when: "Just now", at: Date.now() });
   writeParking(p);
   return null;
 }

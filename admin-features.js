@@ -126,7 +126,7 @@ function downloadReport(){
 /* ---------- Parking ---------- */
 const PARKING_UNITS = ["Unit 12A","Unit 7C","Unit 3B","Unit 15D","Unit 9A","Unit 21B","Unit 18C","Unit 6B","Unit 2A","Unit 8C","Unit 10D","Unit 14A","Unit 17B"];
 const PARKING = Array.from({ length: 24 }, (_, i) => ({ id: "M-" + String(i + 1).padStart(2, "0"), unit: PARKING_UNITS[i] || "" }));
-let PARKING_REQUESTS = [{ unit:"Unit 4D", who:"Reyes-Torres Household", when:"2 days ago" },{ unit:"Unit 11B", who:"Fernandez Household", when:"Yesterday" }];
+let PARKING_REQUESTS = [{ unit:"Unit 4D", who:"Reyes-Torres Household", when:"2 days ago", at:1 },{ unit:"Unit 11B", who:"Fernandez Household", when:"Yesterday", at:2 }];
 /* Load what is saved (residents add requests from their own page) and save every change. */
 function hydrateParking(){
   const p = readParking();

@@ -383,3 +383,16 @@ Added as extras for the demo, not required deliverables — flag these to the pa
 - "Login" is a plain equality check in the browser, not real authentication.
 - Exports are real `.csv` downloads generated entirely in the browser.
 - Sample data (52 units, 184 residents, 5 vendors, etc.) is illustrative, per the proposal's note that final workflows/data are confirmed during requirements analysis with the client.
+
+## Live sync with the ResidentHub app (Supabase)
+
+Payment submissions, receipts and motor parking are shared between the website (resident and admin pages) and the ResidentHub app. A change on one shows on the others within about a second.
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open **SQL Editor > New query**, paste the contents of `supabase-shared-records.sql`, and run it.
+3. Open **Project Settings > API**. Copy the **Project URL** and the **anon public** key into `supabase-config.js`. The anon key is meant to be public. Never use the `service_role` key.
+4. Commit the change. The website redeploys, and a small "Live · connected" badge appears in the bottom-left corner.
+
+Until step 3 is done the website still works, saving its data in the browser only.
+
+The demo logins are not Supabase accounts yet, so this table is open to anyone holding the anon key. That is fine for the capstone demo. Switch the logins to Supabase Auth before real residents use it.
