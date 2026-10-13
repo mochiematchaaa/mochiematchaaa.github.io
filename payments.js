@@ -18,8 +18,9 @@ function writeProofs(list){
   try { localStorage.setItem(PAY_KEY, JSON.stringify(list)); } catch(err){ /* storage unavailable */ }
 }
 function nextReceiptNo(list){
-  /* Counted from the shared list, so two devices never issue the same number. */
-  let max = 0;
+  /* Counted from the shared list, so two devices never issue the same number.
+     The app already issued OR-2026-0001 to 0006 for its sample payments, so numbering starts after those. */
+  let max = 6;
   (list || readProofs()).forEach(p => { const m = /^OR-2026-(\d+)$/.exec(p.receiptNo || ""); if (m) max = Math.max(max, parseInt(m[1], 10)); });
   return "OR-2026-" + String(max + 1).padStart(4, "0");
 }

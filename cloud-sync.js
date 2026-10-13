@@ -41,7 +41,7 @@
   }
   /* What the cloud holds right now: "kind|id" -> { kind, id, value } */
   const known = new Map();
-  let client = null, ready = false, pushing = false, pushAgain = false, pushTimer = null;
+  let client = null, ready = false, pushing = false, pushAgain = false, pushTimer = null, dirty = false, applyAfterPush = false;
 
   function localRows(){
     const rows = [];
@@ -93,7 +93,15 @@
     (data || []).forEach(r => known.set(keyOf(r.kind, r.id), { kind:r.kind, id:r.id, value:r.value }));
     /* A brand-new project has no parking rows yet: the first device in saves the starting layout. */
     const seeding = !(data || []).some(r => r.kind === "slot");
-    if (!seeding) applyKnownToLocal();
+    if (seeding){
+      /* Keep anything saved only on this device, and add what the cloud already has (for example from the app). */
+      const cloudProofs = Array.from(known.values()).filter(r => r.kind === "proof").map(r => r.value);
+      const ids = new Set(cloudProofs.map(p => String(p.id)));
+      const merged = cloudProofs.concat(readProofs().filter(p => !ids.has(String(p.id)))).sort((a, b) => Number(b.id) - Number(a.id));
+      try { localStorage.setItem(PAY_KEY, JSON.stringify(merged)); } catch(err){}
+    } else {
+      applyKnownToLocal();
+    }
     ready = true; window.RH_CLOUD.ready = true;
     if (seeding) await pushDiff(true);
     safeRender();
@@ -103,7 +111,8 @@
   async function pushDiff(force){
     if (!ready && !force) return;
     if (pushing){ pushAgain = true; return; }
-    pushing = true;
+    pushing = true; dirty = false;
+    let failed = false;
     try {
       const want = new Map(localRows().map(r => [keyOf(r.kind, r.id), r]));
       const upserts = [], deletes = [];
@@ -122,14 +131,16 @@
       badge("Live · connected", "good");
     } catch(err){
       console.warn("ResidentHub sync:", err);
+      failed = true;
       badge("Sync problem · retrying", "bad");
       clearTimeout(pushTimer); pushTimer = setTimeout(() => pushDiff(), 4000);
     } finally {
       pushing = false;
       if (pushAgain){ pushAgain = false; pushDiff(); }
+      else if (applyAfterPush && !dirty && !failed){ applyAfterPush = false; applyKnownToLocal(); safeRender(); }
     }
   }
-  function schedulePush(){ clearTimeout(pushTimer); pushTimer = setTimeout(() => pushDiff(), 120); }
+  function schedulePush(){ dirty = true; clearTimeout(pushTimer); pushTimer = setTimeout(() => pushDiff(), 120); }
 
   /* Whenever this page saves, push the change. */
   const _writeProofs = window.writeProofs, _writeParking = window.writeParking;
@@ -146,6 +157,9 @@
         if (!r || !KINDS.includes(r.kind)) return;
         if (payload.eventType === "DELETE") known.delete(keyOf(r.kind, r.id));
         else known.set(keyOf(r.kind, r.id), { kind:r.kind, id:r.id, value:r.value });
+        /* If this device has a change of its own on the way, send it first so it is not overwritten. */
+        if (!ready) return;
+        if (dirty || pushing){ applyAfterPush = true; return; }
         applyKnownToLocal(); safeRender();
       })
       .subscribe(function(status){
