@@ -44,6 +44,7 @@ const state = {
   view:"home", facIdx:0, pick:null, submitted:{}, extraBookings:[],  bellOpen:false, bellSeen:false, grTitle:"", grBody:"", myGrs:[],
   darkMode:false, settingsMsg:"",
   motorParkingRequested:false,
+  payFor:"", payAmt:"", payMethod:"GCash", payRef:"",
   unitUsage:"owner", unitUsageDetails:"", unitUsageSaved:false, unitUsageMsg:"",
   profile:{ name:"Maria Santos", email:"maria.santos@cityresidences.ph", phone:"0917 555 0112" },
   sessions:[
@@ -209,7 +210,7 @@ function view(){
   return { home:viewHome, book:viewBook, res:viewRes, dues:viewDues, gr:viewGr, docs:viewDocs, rental:viewRental, settings:viewSettings, events:viewEvents, polls:viewPolls, directory:viewDirectory }[state.view]();
 }
 
-function duesBalance(){ return peso(DUES_ROWS.filter(d=>d.status!=="Paid").reduce((s,d)=>s+d.amt,0)); }
+function duesBalance(){ return peso(DUES_ROWS.filter(d=>rowStatus(d)!=="Paid").reduce((s,d)=>s+d.amt,0)); }
 
 function homeAside(){
   const items = COMMUNITY_EVENTS.map(e=>[e.title, e.place, e.when]);
@@ -219,7 +220,7 @@ function homeAside(){
 function viewHome(){
   const rentalRecord = readUnitUsageRecord();
   const rentalLabel = rentalRecord ? ({owner:"Owner-occupied",tenant:"Leased out",shortterm:"Short-term",business:"Business use"})[rentalRecord.usage] : "Owner-occupied";
-  const unpaidRows = DUES_ROWS.filter(d=>d.status!=="Paid");
+  const unpaidRows = DUES_ROWS.filter(d=>rowStatus(d)!=="Paid");
   const nextDue = unpaidRows[0];
   const household = ["M","J","A"]; // initials for the 3 household members on file
   const next = BASE_BOOKINGS[0];
@@ -308,15 +309,17 @@ function viewDues(){
     <div class="two-col" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
       <div class="card" style="padding:0;overflow:hidden">
         <table><thead><tr><th>MONTH</th><th>CHARGE</th><th>DUE DATE</th><th>STATUS</th></tr></thead>
-        <tbody>${DUES_ROWS.map(d=>`<tr><td style="font-weight:600">${d.month}</td><td>${peso(d.amt)}</td><td style="color:var(--muted)">${d.due}</td><td><span class="chip ${d.status==="Paid"?"good":"bad"}">${d.status}</span></td></tr>`).join("")}</tbody></table>
+        <tbody>${DUES_ROWS.map(d=>`<tr><td style="font-weight:600">${d.month}</td><td>${peso(d.amt)}</td><td style="color:var(--muted)">${d.due}</td><td><span class="chip ${rowStatus(d)==="Paid"?"good":rowStatus(d)==="Pending"?"warn":"bad"}">${rowStatus(d)}</span></td></tr>`).join("")}</tbody></table>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
         <div class="card">
           <div style="font-size:13px;font-weight:600;color:var(--muted)">Outstanding balance</div>
           <div style="font:700 34px 'Bricolage Grotesque','Source Sans 3',sans-serif;color:#A02B1D">${duesBalance()}</div>
           <p style="font-size:13px;color:var(--muted);line-height:1.5;margin:8px 0 0">Payment status is recorded here once your association processes it. Direct online payment is outside this preview's scope.</p>
-          <button class="btn" style="width:100%;margin-top:10px" onclick='exportCSV("my-dues.csv",["Month","Charge","Due date","Status"],DUES_ROWS.map(d=>[d.month,d.amt,d.due,d.status]))'>Export to Excel (.csv)</button>
+          <button class="btn" style="width:100%;margin-top:10px" onclick='exportCSV("my-dues.csv",["Month","Charge","Due date","Status"],DUES_ROWS.map(d=>[d.month,d.amt,d.due,rowStatus(d)]))'>Export to Excel (.csv)</button>
         </div>
+        ${payFormHtml()}
+        ${myPaymentsHtml()}
         <div class="card">
           <h2 style="font-size:17px;margin-bottom:4px">Motor parking rental</h2>
           <p style="margin:0 0 10px;font-size:13px;color:var(--muted)">Rent a motor/motorcycle parking slot for <b>${peso(MOTOR_PARKING_RATE)}/month</b>. This rate isn't fixed and may change — check with the office for the latest amount.</p>
@@ -572,3 +575,49 @@ render();
 window.addEventListener("pageshow", function (event) {
   if (event.persisted && state.redirecting) { state.redirecting = ""; render(); }
 });
+
+
+/* ---------- Payment submission, verification status and receipts (see payments.js) ---------- */
+function resUnit(){ return ((state.currentUser && state.currentUser.unit) || "Unit 12A · Owner").split("·")[0].trim(); }
+function resPayer(){ return (state.currentUser && state.currentUser.name) || "Maria Santos"; }
+function rowStatus(d){
+  if (d.status === "Paid") return "Paid";
+  const ps = myProofs(resUnit()).filter(p => p.forText === d.month);
+  if (ps.some(p => p.status === "Confirmed")) return "Paid";
+  if (ps.some(p => p.status === "Pending")) return "Pending";
+  return d.status;
+}
+function choosePayFor(v){
+  const d = DUES_ROWS.find(x => x.month === v);
+  state.payFor = v;
+  state.payAmt = d ? String(d.amt) : (v === "Motor parking rental" ? String(MOTOR_PARKING_RATE) : "");
+  render();
+}
+function submitPaymentProof(){
+  const err = submitProof({ unit:resUnit(), payer:resPayer(), forText:state.payFor, method:state.payMethod, reference:state.payRef, amount:state.payAmt });
+  if (err){ toast(err); return; }
+  set({ payFor:"", payAmt:"", payRef:"" });
+  toast("Payment details sent. The office will verify them and your receipt will appear here.");
+}
+function payFormHtml(){
+  const open = DUES_ROWS.filter(d => rowStatus(d) === "Overdue").map(d => d.month).concat(["Motor parking rental","Other charge"]);
+  return `<div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <h2 style="font-size:17px;margin-bottom:0">I have paid</h2>
+    <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5">Pay at the office, by bank transfer, GCash or Maya. Then send the details here so the office can verify them and issue your receipt. This system does not take payments itself.</p>
+    <label>Payment for<select onchange="choosePayFor(this.value)"><option value="">Choose…</option>${open.map(o=>`<option value="${escAttr(o)}" ${state.payFor===o?"selected":""}>${o}</option>`).join("")}</select></label>
+    <label>Amount paid (₱)<input type="number" min="0.01" step="0.01" placeholder="e.g. 450" value="${escAttr(state.payAmt)}" oninput="state.payAmt=this.value"></label>
+    <label>Payment method<select onchange="state.payMethod=this.value">${PAY_METHODS.map(m=>`<option ${state.payMethod===m?"selected":""}>${m}</option>`).join("")}</select></label>
+    <label>Reference number<input type="text" placeholder="Number on your receipt or transaction" value="${escAttr(state.payRef)}" oninput="state.payRef=this.value"></label>
+    <button class="btn primary" onclick="submitPaymentProof()">Send payment details</button>
+  </div>`;
+}
+function myPaymentsHtml(){
+  const list = myProofs(resUnit());
+  return `<div class="card">
+    <h2 style="font-size:17px;margin-bottom:8px">My payments</h2>
+    ${list.length ? list.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line,#E7E2D6)">
+      <div style="min-width:0"><b style="font-size:14px">${payEsc(p.forText)}</b><div style="font-size:12.5px;color:var(--muted)">${payEsc(p.method)} · Ref ${payEsc(p.reference)} · ${peso(p.amount)}</div>${p.receiptNo?`<div style="font-size:12.5px;color:var(--muted)">Receipt ${payEsc(p.receiptNo)}</div>`:""}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${proofChip(p.status)}${p.status==="Confirmed"?`<button class="btn" style="min-height:30px;padding:0 10px;font-size:12px" onclick="downloadReceipt(${p.id})">Receipt</button>`:""}</div>
+    </div>`).join("") : `<p style="margin:0;font-size:13px;color:var(--muted)">No payments sent yet. After you pay, send the details above.</p>`}
+  </div>`;
+}
