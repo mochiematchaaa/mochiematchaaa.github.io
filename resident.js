@@ -320,18 +320,42 @@ function viewDues(){
         </div>
         ${payFormHtml()}
         ${myPaymentsHtml()}
-        <div class="card">
-          <h2 style="font-size:17px;margin-bottom:4px">Motor parking rental</h2>
-          <p style="margin:0 0 10px;font-size:13px;color:var(--muted)">Rent a motor/motorcycle parking slot for <b>${peso(MOTOR_PARKING_RATE)}/month</b>. This rate isn't fixed and may change — check with the office for the latest amount.</p>
-          ${state.motorParkingRequested
-            ? `<div class="chip good">Request sent — awaiting admin confirmation</div>`
-            : `<button class="btn primary" style="width:100%" onclick="requestMotorParking()">Request a parking slot</button>`}
-        </div>
+        ${parkingCardHtml()}
       </div>
     </div>
   `;
 }
-function requestMotorParking(){ set({ motorParkingRequested: true }); }
+function requestMotorParking(){
+  const err = requestParkingSlot(resUnit(), resPayer());
+  if (err){ toast(err); return; }
+  render(); toast("Parking slot request sent to the administrator.");
+}
+function parkingCardHtml(){
+  const p = readParking();
+  const unit = resUnit();
+  const mine = p.slots.indexOf(unit);
+  const requested = p.requests.some(q => q.unit === unit);
+  const free = p.slots.filter(u => !u).length;
+  const grid = p.slots.map((u,i) => {
+    const isMine = i === mine;
+    const bg = isMine ? "var(--ink)" : (u ? "var(--bad-bg)" : "var(--good-bg)");
+    const fg = isMine ? "#fff" : (u ? "var(--bad-fg)" : "var(--good-fg)");
+    return `<div title="${isMine ? "Your slot" : (u ? "Taken" : "Free")}" style="background:${bg};color:${fg};border-radius:10px;padding:7px 0;text-align:center;font-size:11.5px;font-weight:700">${parkSlotId(i)}</div>`;
+  }).join("");
+  let action;
+  if (mine >= 0) action = `<div class="chip good">Your slot: ${parkSlotId(mine)}</div>`;
+  else if (requested) action = `<div class="chip good">Request sent — awaiting admin confirmation</div>`;
+  else action = `<button class="btn primary" style="width:100%" onclick="requestMotorParking()">Request a parking slot</button>`;
+  return `<div class="card">
+    <h2 style="font-size:17px;margin-bottom:4px">Motor parking rental</h2>
+    <p style="margin:0 0 10px;font-size:13px;color:var(--muted)">Rent a motor/motorcycle parking slot for <b>${peso(p.rate)}/month</b>. This rate isn't fixed and may change — check with the office for the latest amount.</p>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><b style="font-size:14px">${free} of ${p.slots.length} slots free</b><span style="font-size:12px;color:var(--muted)">Green = free · Red = taken</span></div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px">${grid}</div>
+    ${free === 0 && mine < 0 && !requested ? `<p style="margin:0 0 8px;font-size:12.5px;color:var(--muted)">No free slots right now. You can still send a request and the office will assign one when it is free.</p>` : ""}
+    ${action}
+  </div>`;
+}
+
 
 function viewGr(){
   const all = BASE_GRS.concat(state.myGrs);
