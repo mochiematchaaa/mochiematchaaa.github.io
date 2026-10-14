@@ -84,3 +84,12 @@ input[id^="rentalNote-"]{width:100%;min-width:240px}.field:has(>input[id^="renta
 .side nav button .nav-tag{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.22);color:inherit;white-space:nowrap}
 .side nav button.active .nav-tag{background:rgba(0,0,0,.08)}
 @media (max-width:900px){.side nav button .nav-tag{display:none}}
+
+/* parking: a slot a resident reserved and has not paid for yet */
+.pslot.held{border:1.5px dashed var(--gold-dark,#A97B25);background:var(--warn-bg,#F7E4A5);color:var(--warn-fg,#6B4A00)}
+.pk.held{background:var(--warn-bg);color:var(--warn-fg)}
+.pk.held.mine-held{background:var(--warn-bg);color:var(--warn-fg);box-shadow:inset 0 0 0 2px var(--ink)}
+.pk-legend i.held{background:var(--warn-fg)}
+button.pk{border:0;cursor:pointer;font-family:inherit}
+button.pk.pick{transition:transform .2s,box-shadow .2s}
+button.pk.pick:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.16);outline:2px solid var(--ink)}

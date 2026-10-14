@@ -117,7 +117,18 @@ function confirmProof(id) {
     await put("proof", id, row.unit, p);
     await issuePayment(p.unit, p.payer, p.forText, p.method, p.reference, p.amount, p.receiptNo);
     logAct("Payment recorded, " + p.unit, "Finance");
-    toast("Payment confirmed. Receipt " + p.receiptNo + " is ready for " + p.unit + ".");
+    // a paid parking reservation: the chosen slot goes to the resident straight away
+    var assigned = "";
+    if (p.forText === PARK_FOR && p.slot) {
+      var rq = getRow("request", p.unit), sl = getRow("slot", p.slot);
+      if (rq && !rq.value.confirmed && rq.value.slot === p.slot && sl && !sl.value.unit) {
+        await put("slot", p.slot, "", { id: p.slot, unit: p.unit });
+        await put("request", p.unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
+        logAct("Parking slot " + p.slot + " assigned to " + p.unit + " (paid)", "Parking");
+        assigned = p.slot;
+      }
+    }
+    toast(assigned ? "Payment confirmed. Slot " + assigned + " is now assigned to " + p.unit + "." : "Payment confirmed. Receipt " + p.receiptNo + " is ready for " + p.unit + ".");
   });
 }
 function rejectProof(id) {
@@ -380,9 +391,19 @@ function viewParking() {
   return '<div class="grid cols-3">' + statCard("Slots in use", used + " of " + slots.length) + statCard("Monthly parking income", peso(used * rate)) + statCard("Requests waiting", String(reqs.length)) + "</div>" +
     '<div class="two-col-r" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Motor parking slots</h2><button class="btn" onclick="addSlotsForm()">+ Add slots</button></div>' +
     '<p class="hint">Tap a slot to assign it to a unit, release it, rename it or delete it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
-    '<div class="slotgrid">' + slots.map(function (s) { return '<button class="pslot ' + (s.v.unit ? "used" : "free") + '" onclick="openSlot(\'' + escAttr(s.id) + '\')"><b>' + esc(s.id) + "</b><small>" + esc(s.v.unit || "Free") + "</small></button>"; }).join("") + "</div></div>" +
-    '<div class="card"><h2>Requests</h2><p class="hint">Residents who asked for a slot.</p>' + (reqs.map(function (r) {
-      return '<div class="req-row"><div><b>' + esc(r.v.unit) + "</b><small>" + esc(r.v.who || "") + " · " + esc(r.v.when || "") + '</small></div><div><button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign</button><button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button></div></div>';
+    '<div class="slotgrid">' + slots.map(function (s) { var h = heldSlots()[s.id]; return '<button class="pslot ' + (s.v.unit ? "used" : h ? "held" : "free") + '" onclick="openSlot(\'' + escAttr(s.id) + '\')"><b>' + esc(s.id) + "</b><small>" + esc(s.v.unit || (h ? "Held · " + h : "Free")) + "</small></button>"; }).join("") + "</div></div>" +
+    '<div class="card"><h2>Requests</h2><p class="hint">Residents who reserved or asked for a slot. A reserved slot is approved when its payment is confirmed.</p>' + (reqs.map(function (r) {
+      var v = r.v, pr = v.slot ? parkProof(r.id, v.slot) : null, pst = pr ? pr.v.status : "", state;
+      var btns;
+      if (v.slot && v.amount) {
+        state = pr ? (pst === "Confirmed" ? '<span class="chip good">Paid</span>' : '<span class="chip warn">Payment sent · Ref ' + esc(pr.v.reference) + "</span>") : '<span class="chip info">Waiting for payment</span>';
+        btns = pr ? (pst === "Confirmed" ? '<button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign ' + esc(v.slot) + "</button>" : '<button class="btn primary" onclick="confirmProof(\'' + escAttr(pr.id) + '\')">Confirm payment</button>') : '<button class="btn" onclick="approveParkingFree(\'' + escAttr(r.id) + '\')">Assign without payment</button>';
+        btns += '<button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button>';
+      } else {
+        state = v.slot ? '<span class="chip info">Chose ' + esc(v.slot) + "</span>" : "";
+        btns = '<button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign' + (v.slot ? " " + esc(v.slot) : "") + '</button><button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button>';
+      }
+      return '<div class="req-row"><div><b>' + esc(v.unit) + "</b><small>" + esc(v.who || "") + " · " + esc(v.when || "") + (v.slot ? " · Slot " + esc(v.slot) + (v.amount ? " · " + peso(Number(v.amount)) : "") : "") + "</small>" + (state ? '<div style="margin-top:6px">' + state + "</div>" : "") + "</div><div>" + btns + "</div></div>";
     }).join("") || '<p class="empty">No requests waiting.</p>') + "</div></div>";
 }
 /* the next n slot names (M-01, M-02, ...) that no slot uses yet, so adding never overwrites a slot */
@@ -463,15 +484,28 @@ function removeSlot(id) {
   }, true);
 }
 function approveParking(unit) {
-  var free = sortedSlots().filter(function (s) { return !s.v.unit; })[0];
-  if (!free) return toast("There are no free slots right now.");
   var rq = getRow("request", unit); if (!rq) return;
+  var chosen = rq.value.slot ? getRow("slot", rq.value.slot) : null;
+  var target = chosen ? chosen.id : (sortedSlots().filter(function (s) { return !s.v.unit && !heldSlots()[s.id]; })[0] || {}).id;
+  if (!target) return toast("There are no free slots right now.");
+  if (chosen && chosen.value.unit) return toast(chosen.id + " is already taken. Decline this request or ask the resident to pick another slot.");
   act(async function () {
-    await put("slot", free.id, "", { id: free.id, unit: unit });
+    await put("slot", target, "", { id: target, unit: unit });
     await put("request", unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
-    logAct("Parking slot " + free.id + " assigned to " + unit, "Parking");
-    toast(free.id + " assigned to " + unit + ".");
+    logAct("Parking slot " + target + " assigned to " + unit, "Parking");
+    toast(target + " assigned to " + unit + ".");
   });
+}
+/* assign without a payment: the office decides to waive it */
+function approveParkingFree(unit) {
+  confirmBox("Assign without payment?", unit + " has not paid yet. The slot is assigned and no payment is recorded.", "Assign anyway", async function () {
+    var rq = getRow("request", unit); if (!rq) return;
+    var id = rq.value.slot; if (!id) return;
+    var sl = getRow("slot", id); if (!sl || sl.value.unit) throw new Error(id + " is already taken.");
+    await put("slot", id, "", { id: id, unit: unit });
+    await put("request", unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
+    logAct("Parking slot " + id + " assigned to " + unit + " without payment", "Parking");
+  }, true);
 }
 function declineParking(unit) {
   act(async function () { await del("request", unit); logAct("Parking request declined, " + unit, "Parking"); });

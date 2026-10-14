@@ -320,9 +320,22 @@ function payMethods() {
   });
 }
 function slotKey(f, i) { var a = facilities()[f]; return (a ? a.id : f) + "-" + i; }
+/* Motor parking: a resident picks a free slot, pays, and the office confirms the payment.
+   The request row holds the chosen slot ("slot") and the rental ("amount"). */
+var PARK_FOR = "Motor parking rental";
+/* slot name -> unit, for slots that a resident picked and has not been approved yet */
+function heldSlots() {
+  var h = {};
+  list("request").forEach(function (r) { if (r.v.slot && !r.v.confirmed) h[r.v.slot] = r.v.unit || r.id; });
+  return h;
+}
+/* the latest payment a unit sent for a parking slot that was not rejected */
+function parkProof(unit, slotId) {
+  return newest(list("proof")).filter(function (r) { return r.unit === unit && r.v.forText === PARK_FOR && r.v.slot === slotId && r.v.status !== "Rejected"; })[0] || null;
+}
 /* "5 free" for the navigation, or "" when no parking slots are set up */
 function parkingFreeTag() {
-  var all = list("slot"), free = all.filter(function (s) { return !s.v.unit; }).length;
+  var all = list("slot"), held = heldSlots(), free = all.filter(function (s) { return !s.v.unit && !held[s.id]; }).length;
   return all.length ? free + " free" : "";
 }
 function slotBooked(f, i) {
