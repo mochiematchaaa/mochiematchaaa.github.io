@@ -29,3 +29,8 @@
 .chans label.chan { flex-direction: row !important; align-items: center !important; gap: 12px !important; font-weight: 400; }
 .chans label.chan input { width: 18px !important; height: 18px !important; padding: 0 !important; margin: 0; }
 .chans label.chan span { text-align: left; }
+
+/* Phone: keep Log out in view at the end of the top bar */
+@media (max-width: 900px) {
+  .side-foot { position: sticky; right: 0; z-index: 2; padding-left: 8px !important; background: linear-gradient(90deg, rgba(88,120,170,0), #5b84a8 22%); border-radius: 0 16px 16px 0; }
+}

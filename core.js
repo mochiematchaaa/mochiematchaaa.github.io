@@ -640,7 +640,11 @@ function renderVerify() {
    ========================================================================== */
 async function signOut(everywhere) {
   stopLive();
-  await sb.auth.signOut(everywhere === true ? { scope: "global" } : undefined);
+  // Never get stuck on the server: wait a few seconds at most, then clear this browser's sign-in ourselves.
+  var wait = function (p) { return Promise.race([p, new Promise(function (r) { setTimeout(r, 2500); })]); };
+  try { await wait(sb.auth.signOut(everywhere === true ? { scope: "global" } : undefined)); } catch (e) { /* carry on */ }
+  try { await wait(sb.auth.signOut({ scope: "local" })); } catch (e) { /* carry on */ }
+  try { Object.keys(localStorage).filter(function (k) { return /^sb-.*-auth-token/.test(k); }).forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* storage blocked */ }
   DB.user = DB.profile = null; DB.rows = {}; DB.accounts = []; DB.sig = "";
   rhLeave();
   renderLogin();
