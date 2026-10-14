@@ -36,4 +36,6 @@ The system starts empty. The administrator enters every detail (units, residents
 2. In the SQL editor, set that user's profile role to admin: `update public.profiles set role = 'admin', name = 'Your Name' where email = 'your@email';`
 3. Turn off "Allow new users to sign up" (Authentication → Sign In / Providers) so only the administrator can create accounts.
 
+Passwords must have at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol; the sign-in pages show a live checklist. For the same rules everywhere, also set Authentication > Sign In / Providers > Email > password requirements in Supabase to a minimum length of 8 with "lowercase, uppercase, digits and symbols".
+
 Never put the Supabase `service_role` key or the database password in any file in this repository.

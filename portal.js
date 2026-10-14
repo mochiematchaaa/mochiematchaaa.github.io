@@ -80,6 +80,36 @@
     if (/Failed to fetch|NetworkError|network/i.test(m)) return "No internet connection. Try again.";
     return m || "Something went wrong.";
   }
+  // The rules a new password must follow (checked again on the server).
+  var PW_RULES = [
+    ["At least 8 characters", function (p) { return p.length >= 8; }],
+    ["An uppercase letter (A-Z)", function (p) { return /[A-Z]/.test(p); }],
+    ["A lowercase letter (a-z)", function (p) { return /[a-z]/.test(p); }],
+    ["A number (0-9)", function (p) { return /\d/.test(p); }],
+    ["A symbol, e.g. ! @ # $ %", function (p) { return /[^A-Za-z0-9]/.test(p); }]
+  ];
+  function pwProblem(p) {
+    for (var i = 0; i < PW_RULES.length; i++) {
+      if (!PW_RULES[i][1](p)) return "Your new password needs: " + PW_RULES[i][0].replace(/^A(n)? /, function (m, n) { return n ? "an " : "a "; }).replace(/^At least/, "at least") + ".";
+    }
+    return null;
+  }
+  function rulesHtml() {
+    return '<ul class="rules" data-rules>' + PW_RULES.map(function (r) { return "<li>" + esc(r[0]) + "</li>"; }).join("") + "</ul>";
+  }
+  // Puts a check mark in front of each rule the password follows, as the person types.
+  function bindRules(input, root) {
+    var items = root.querySelectorAll("li");
+    function upd() {
+      for (var i = 0; i < items.length; i++) items[i].className = PW_RULES[i][1](input.value) ? "ok" : "";
+    }
+    input.addEventListener("input", function () {
+      var er = input.form && input.form.querySelector(".err");
+      if (er) er.hidden = true;
+      upd();
+    });
+    upd();
+  }
   function naturalCompare(a, b) {
     return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
   }
@@ -234,6 +264,7 @@
           esc(f.placeholder || "") + '"' + (f.readonly ? " readonly" : "") + (f.step ? ' step="' + f.step + '"' : "") + ">";
       }
       html += "</label>";
+      if (f.rules) html += rulesHtml();
     });
     html += '<div class="err" hidden></div><div class="btns"><button type="button" class="btn ghost" data-close>Cancel</button>' +
       '<button class="btn" type="submit">' + esc(o.submit || "Save") + "</button></div></form></div>";
@@ -242,6 +273,7 @@
     var veil = wrap.firstChild;
     document.body.appendChild(veil);
     var form = $("form", veil);
+    (o.fields || []).forEach(function (f) { if (f.rules) bindRules($('[name="' + f.name + '"]', form), $("[data-rules]", form)); });
     var first = $("input:not([readonly]),select,textarea", form);
     if (first) first.focus();
     veil.addEventListener("mousedown", function (e) { if (e.target === veil) closeModal(); });
@@ -356,13 +388,14 @@
         '<label class="f"><span>Email of your account</span><input name="email" type="email" required value="' + esc(email) + '"' + (sent ? " readonly" : "") + "></label>" +
         (sent ? '<label class="f"><span>Code from your email</span><input name="ec" inputmode="numeric" maxlength="6" required></label>' +
           '<label class="f"><span>Code from the text message</span><input name="sc" inputmode="numeric" maxlength="6" required></label>' +
-          '<label class="f"><span>New password (at least 8 characters)</span><input name="pw" type="password" autocomplete="new-password" required></label>' +
+          '<label class="f"><span>New password</span><input name="pw" type="password" autocomplete="new-password" required></label>' + rulesHtml() +
           '<label class="f"><span>Confirm new password</span><input name="pw2" type="password" autocomplete="new-password" required></label>' +
           '<button class="btn full" type="submit">Change password</button>' +
           '<button class="btn ghost full" type="button" id="fResend" style="margin-top:10px"></button>'
           : '<button class="btn full" type="submit">Send the codes</button>') +
         '<p class="sub" style="margin-top:14px;font-size:14px">No code arrived, or your mobile number changed? Contact the administration office.</p>' +
         '<a class="back" href="#" id="fBack">← Back to sign in</a></form></div>';
+      if (sent) bindRules($("#fForm [name=pw]"), $("#fForm [data-rules]"));
       $("#fBack").addEventListener("click", function (e) { e.preventDefault(); clearInterval(tick); renderLogin(); });
       var rs = $("#fResend");
       if (rs) {
@@ -386,7 +419,8 @@
             sent = true; wait = 60; draw();
             return;
           }
-          if (f.pw.value.length < 8) throw new Error("New password must be at least 8 characters.");
+          var bad = pwProblem(f.pw.value);
+          if (bad) throw new Error(bad);
           if (f.pw.value !== f.pw2.value) throw new Error("The two passwords don't match.");
           await callReset({ action: "confirm", email: email, emailCode: f.ec.value.trim(), smsCode: f.sc.value.trim(), newPassword: f.pw.value });
           clearInterval(tick);
@@ -402,17 +436,19 @@
     $("#root").innerHTML =
       '<div class="login"><form class="login-card" id="npForm">' +
       '<div class="brand"><img src="logo.jpg" alt=""><span><b>ResidentHub</b><small>CITY RESIDENCES</small></span></div>' +
-      "<h1>Choose your password</h1><p class=\"sub\">The administrator gave you a temporary password. Set your own to continue (at least 8 characters).</p>" +
+      "<h1>Choose your password</h1><p class=\"sub\">The administrator gave you a temporary password. Set your own to continue.</p>" +
       '<div class="err" id="npErr" hidden></div>' +
-      '<label class="f"><span>New password</span><input name="pw" type="password" autocomplete="new-password" minlength="8" required></label>' +
-      '<label class="f"><span>Confirm new password</span><input name="pw2" type="password" autocomplete="new-password" minlength="8" required></label>' +
+      '<label class="f"><span>New password</span><input name="pw" type="password" autocomplete="new-password" required></label>' + rulesHtml() +
+      '<label class="f"><span>Confirm new password</span><input name="pw2" type="password" autocomplete="new-password" required></label>' +
       '<button class="btn full" type="submit">Save and continue</button>' +
       '<button class="btn ghost full" type="button" id="npOut" style="margin-top:10px">Sign out</button></form></div>';
+    bindRules($("#npForm [name=pw]"), $("#npForm [data-rules]"));
     $("#npOut").addEventListener("click", signOut);
     $("#npForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       var f = e.target, err = $("#npErr"), btn = $("button", f);
-      if (f.pw.value.length < 8) { err.textContent = "Password must be at least 8 characters."; err.hidden = false; return; }
+      var bad = pwProblem(f.pw.value);
+      if (bad) { err.textContent = bad; err.hidden = false; return; }
       if (f.pw.value !== f.pw2.value) { err.textContent = "The two passwords don't match."; err.hidden = false; return; }
       btn.disabled = true; err.hidden = true;
       try {
@@ -1260,11 +1296,12 @@
       title: "Change password",
       fields: [
         { name: "cur", label: "Current password", type: "password" },
-        { name: "pw", label: "New password (at least 8 characters)", type: "password" },
+        { name: "pw", label: "New password", type: "password", rules: true },
         { name: "pw2", label: "Confirm new password", type: "password" }
       ],
       onSubmit: async function (d) {
-        if (d.pw.length < 8) return { error: "New password must be at least 8 characters." };
+        var bad = pwProblem(d.pw);
+        if (bad) return { error: bad };
         if (d.pw !== d.pw2) return { error: "New password and confirmation don't match." };
         var chk = await sb.auth.signInWithPassword({ email: S.profile.email, password: d.cur });
         if (chk.error) return { error: "Your current password is not correct." };
