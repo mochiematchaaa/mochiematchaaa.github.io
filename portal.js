@@ -354,6 +354,70 @@
     });
   }
 
+  // Confirm the email address and mobile number with two 6-digit codes.
+  async function callVerify(body) {
+    var r = await sb.functions.invoke("verify-contact", { body: body });
+    if (r.error) {
+      var msg = r.error.message;
+      try {
+        if (r.error.context && r.error.context.json) {
+          var j = await r.error.context.json();
+          if (j && j.error) msg = j.error;
+        }
+      } catch (e) { /* keep default */ }
+      throw new Error(msg || "Could not reach the server.");
+    }
+    if (r.data && r.data.error) throw new Error(r.data.error);
+    return r.data || {};
+  }
+  function renderVerify() {
+    var sent = false, wait = 0, tick = null;
+    function draw(info, err) {
+      $("#root").innerHTML =
+        '<div class="login"><form class="login-card" id="vForm">' +
+        '<div class="brand"><img src="logo.jpg" alt=""><span><b>ResidentHub</b><small>CITY RESIDENCES</small></span></div>' +
+        "<h1>Verify your account</h1><p class=\"sub\">" +
+        (sent ? "We sent a code to " + esc(info.email) + " and a text message to " + esc(info.phone) + ". Enter both codes. They expire in 10 minutes."
+          : "For your security, confirm your email address and mobile number. We will send one code by email and one by text message.") + "</p>" +
+        '<div class="err" id="vErr"' + (err ? "" : " hidden") + ">" + esc(err || "") + "</div>" +
+        (sent ? '<label class="f"><span>Code from your email</span><input name="ec" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></label>' +
+          '<label class="f"><span>Code from the text message</span><input name="sc" inputmode="numeric" maxlength="6" required></label>' +
+          '<button class="btn full" type="submit">Verify</button>' +
+          '<button class="btn ghost full" type="button" id="vResend" style="margin-top:10px"></button>'
+          : '<button class="btn full" type="submit">Send the codes</button>') +
+        '<button class="btn ghost full" type="button" id="vOut" style="margin-top:10px">Sign out</button></form></div>';
+      $("#vOut").addEventListener("click", signOut);
+      var rs = $("#vResend");
+      if (rs) {
+        var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send new codes in " + wait + " s" : "Send new codes"; };
+        upd();
+        rs.addEventListener("click", function () { send(); });
+        clearInterval(tick);
+        tick = setInterval(function () { if (wait > 0) wait--; if (!document.body.contains(rs)) return clearInterval(tick); upd(); }, 1000);
+      }
+      $("#vForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = e.target, errEl = $("#vErr"), btn = $("button[type=submit]", f);
+        btn.disabled = true; errEl.hidden = true;
+        try {
+          if (!sent) return await send();
+          var r = await callVerify({ action: "check", emailCode: f.ec.value.trim(), smsCode: f.sc.value.trim() });
+          if (r.verified) {
+            S.profile.contact_verified_at = new Date().toISOString();
+            await boot();
+          }
+        } catch (ex) { errEl.textContent = errText(ex); errEl.hidden = false; btn.disabled = false; }
+      });
+    }
+    async function send() {
+      var r = await callVerify({ action: "send" });
+      if (r.verified) { S.profile.contact_verified_at = new Date().toISOString(); return boot(); }
+      sent = true; wait = r.cooldown || 60;
+      draw({ email: r.email, phone: r.phone });
+    }
+    draw();
+  }
+
   // ------------------------------------------------------------------ session
   async function signOut() {
     stopLive();
@@ -377,6 +441,7 @@
     await boot();
   }
   async function boot() {
+    if (!isAdmin() && !S.profile.contact_verified_at) return renderVerify();
     $("#root").innerHTML = '<div class="boot"><img src="logo.jpg" alt=""><p>Loading your data…</p></div>';
     try {
       await loadAll();
@@ -499,7 +564,7 @@
     var res = S.accounts.filter(function (a) { return a.role === "resident"; });
     var rows = res.map(function (a) {
       return "<tr><td><b>" + esc(a.name) + "</b></td><td>" + esc(a.email) + "</td><td>" + esc(a.unit) + "</td><td>" + esc(a.phone || "—") + "</td><td>" +
-        (a.suspended ? pill("Suspended", "bad") : a.must_change_password ? pill("Not signed in yet", "warn") : pill("Active", "good")) +
+        (a.suspended ? pill("Suspended", "bad") : !a.contact_verified_at ? pill("Not verified yet", "warn") : a.must_change_password ? pill("Not signed in yet", "warn") : pill("Active", "good")) +
         '</td><td class="act">' + btn("acc-reset", a.id, "Reset password") +
         btn("acc-susp", a.id, a.suspended ? "Reactivate" : "Suspend") + btn("acc-del", a.id, "Delete") + "</td></tr>";
     });
@@ -741,12 +806,13 @@
       fields: [
         { name: "name", label: "Full name" },
         { name: "email", label: "Email", type: "email" },
-        { name: "phone", label: "Mobile number" },
+        { name: "phone", label: "Mobile number (a code is texted to it)", placeholder: "e.g. 0917 555 0112" },
         { name: "unit", label: "Unit", type: "select", options: units }
       ],
       submit: "Create",
       onSubmit: async function (d) {
         if (!d.name || !d.email) return { error: "Full name and email are required." };
+        if (!/^(\+?63|0)?9\d{9}$/.test(d.phone.replace(/[\s-]/g, ""))) return { error: "Enter a valid Philippine mobile number, e.g. 0917 555 0112." };
         var r = await callUsers({ action: "create", name: d.name, email: d.email, phone: d.phone, unit: d.unit });
         await loadAccounts();
         logAct("Account created: " + d.unit, "Access");
@@ -758,7 +824,7 @@
   };
   function showPassword(name, email, pw) {
     openInfo("Temporary password",
-      '<p class="note">Give this to <b>' + esc(name) + "</b> (" + esc(email) + "). It is shown only now. They must choose their own password when they sign in.</p>" +
+      '<p class="note">Give this to <b>' + esc(name) + "</b> (" + esc(email) + "). It is shown only now. They must choose their own password when they sign in, then enter a code sent to their email and a code sent to their mobile number.</p>" +
       '<p class="mono">' + esc(pw) + "</p>");
   }
   function accById(id) { return S.accounts.filter(function (a) { return a.id === id; })[0]; }
