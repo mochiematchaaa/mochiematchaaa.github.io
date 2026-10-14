@@ -379,11 +379,19 @@ function viewParking() {
   }
   return '<div class="grid cols-3">' + statCard("Slots in use", used + " of " + slots.length) + statCard("Monthly parking income", peso(used * rate)) + statCard("Requests waiting", String(reqs.length)) + "</div>" +
     '<div class="two-col-r" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Motor parking slots</h2><button class="btn" onclick="addSlotsForm()">+ Add slots</button></div>' +
-    '<p class="hint">Tap a slot to assign it to a unit or release it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
+    '<p class="hint">Tap a slot to assign it to a unit, release it, rename it or remove it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
     '<div class="slotgrid">' + slots.map(function (s) { return '<button class="pslot ' + (s.v.unit ? "used" : "free") + '" onclick="openSlot(\'' + escAttr(s.id) + '\')"><b>' + esc(s.id) + "</b><small>" + esc(s.v.unit || "Free") + "</small></button>"; }).join("") + "</div></div>" +
     '<div class="card"><h2>Requests</h2><p class="hint">Residents who asked for a slot.</p>' + (reqs.map(function (r) {
       return '<div class="req-row"><div><b>' + esc(r.v.unit) + "</b><small>" + esc(r.v.who || "") + " · " + esc(r.v.when || "") + '</small></div><div><button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign</button><button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button></div></div>';
     }).join("") || '<p class="empty">No requests waiting.</p>') + "</div></div>";
+}
+/* the next n slot names (M-01, M-02, ...) that no slot uses yet, so adding never overwrites a slot */
+function freshSlotIds(n) {
+  var used = {}, top = 0;
+  list("slot").forEach(function (r) { used[r.id] = true; var m = /^M-(\d+)$/.exec(r.id); if (m) top = Math.max(top, Number(m[1])); });
+  var out = [], i = top;
+  while (out.length < n) { i++; var id = "M-" + pad(i); if (!used[id]) out.push(id); }
+  return out;
 }
 function addSlotsForm() {
   openForm({
@@ -392,8 +400,8 @@ function addSlotsForm() {
     onSubmit: async function (d) {
       var n = parseInt(d.n, 10);
       if (!(n >= 1 && n <= 200)) return { error: "Enter a number from 1 to 200." };
-      var have = sortedSlots().length;
-      for (var i = have + 1; i <= have + n; i++) { var id = "M-" + pad(i); await put("slot", id, "", { id: id }); }
+      var ids = freshSlotIds(n);
+      for (var i = 0; i < ids.length; i++) await put("slot", ids[i], "", { id: ids[i] });
       logAct(n + " motor parking slot" + (n === 1 ? "" : "s") + " added", "Parking");
     }
   });
@@ -401,12 +409,12 @@ function addSlotsForm() {
 function openSlot(id) {
   var s = getRow("slot", id); if (!s) return;
   if (s.value.unit) {
-    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><div class="modal-actions"><button class="btn primary" onclick="releaseSlot(\'' + escAttr(id) + '\')">Release this slot</button><button class="btn" onclick="closeModal()">Keep</button></div>');
+    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><div class="modal-actions"><button class="btn primary" onclick="releaseSlot(\'' + escAttr(id) + '\')">Release this slot</button><button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" onclick="closeModal()">Keep</button></div>');
   } else {
     var taken = vals("slot").map(function (x) { return x.unit; });
     var choices = unitNames().filter(function (u) { return taken.indexOf(u) < 0; });
-    if (!choices.length) return toast("Every unit already has a slot, or there are no units yet.");
-    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit to assign it to.</p><label class="fl">Unit<select id="pkUnit">' + choices.map(function (u) { return "<option>" + esc(u) + "</option>"; }).join("") + '</select></label><div class="modal-actions"><button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
+    var pick = choices.length ? '<label class="fl">Unit<select id="pkUnit">' + choices.map(function (u) { return "<option>" + esc(u) + "</option>"; }).join("") + '</select></label>' : '<p class="hint">Every unit already has a slot, or there are no units yet.</p>';
+    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit to assign it to, or rename or remove the slot.</p>' + pick + '<div class="modal-actions">' + (choices.length ? '<button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button>' : "") + '<button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Remove</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
   }
 }
 function assignSlot(id) {
@@ -428,6 +436,30 @@ function releaseSlot(id) {
     logAct("Parking slot " + id + " released from " + unit, "Parking");
     toast("Slot released.");
   });
+}
+function renameSlotForm(id) {
+  var s = getRow("slot", id); closeModal(); if (!s) return;
+  openForm({
+    title: "Rename " + id, intro: "Use the name painted on the parking space, e.g. B1-05. The resident keeps the slot.",
+    fields: [{ name: "name", label: "Slot name", value: id }], submit: "Save",
+    onSubmit: async function (d) {
+      var name = String(d.name || "").trim();
+      if (!name) return { error: "Enter a name for the slot." };
+      if (name === id) return;
+      if (list("slot").some(function (r) { return r.id.toLowerCase() === name.toLowerCase(); })) return { error: name + " already exists." };
+      await put("slot", name, "", Object.assign({}, s.value, { id: name }));
+      await del("slot", id);
+      logAct("Parking slot " + id + " renamed to " + name, "Parking");
+    }
+  });
+}
+function removeSlot(id) {
+  var s = getRow("slot", id); closeModal(); if (!s) return;
+  if (s.value.unit) return toast("Release " + id + " first, then remove it.");
+  confirmBox("Remove " + id + "?", "The slot is taken off the parking area. Nobody is using it.", "Remove", async function () {
+    await del("slot", id);
+    logAct("Parking slot " + id + " removed", "Parking");
+  }, true);
 }
 function approveParking(unit) {
   var free = sortedSlots().filter(function (s) { return !s.v.unit; })[0];
