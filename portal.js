@@ -305,8 +305,9 @@
       '<label class="f"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>' +
       '<label class="f"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>' +
       '<button class="btn full" type="submit">Sign in</button>' +
-      '<p class="sub" style="margin-top:14px;font-size:14px">Forgot your password? Ask the administrator to reset it.</p>' +
+      '<p class="sub" style="margin-top:14px;font-size:14px"><a href="#" id="forgotLink">Forgot your password?</a></p>' +
       '<a class="back" href="index.html">← Back to the website</a></form></div>';
+    $("#forgotLink").addEventListener("click", function (e) { e.preventDefault(); renderForgot(); });
     var fails = 0, lockedUntil = 0;
     $("#loginForm").addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -326,6 +327,77 @@
       await start(r.data.session);
     });
   }
+  // Forgot password: one code by email, one by text message, then a new password.
+  async function callReset(body) {
+    var r = await sb.functions.invoke("reset-password", { body: body });
+    if (r.error) {
+      var msg = r.error.message;
+      try {
+        if (r.error.context && r.error.context.json) {
+          var j = await r.error.context.json();
+          if (j && j.error) msg = j.error;
+        }
+      } catch (e) { /* keep default */ }
+      throw new Error(msg || "Could not reach the server.");
+    }
+    if (r.data && r.data.error) throw new Error(r.data.error);
+    return r.data || {};
+  }
+  function renderForgot() {
+    var sent = false, email = "", wait = 0, tick = null;
+    function draw(err) {
+      $("#root").innerHTML =
+        '<div class="login"><form class="login-card" id="fForm">' +
+        '<div class="brand"><img src="logo.jpg" alt=""><span><b>ResidentHub</b><small>CITY RESIDENCES</small></span></div>' +
+        "<h1>Forgot password</h1><p class=\"sub\">" +
+        (sent ? "If that email belongs to an account, we sent a code to it and a text message to the mobile number on file. The codes expire in 10 minutes."
+          : "We send one code to your email and one to your mobile number, so nobody else can take over your account.") + "</p>" +
+        '<div class="err" id="fErr"' + (err ? "" : " hidden") + ">" + esc(err || "") + "</div>" +
+        '<label class="f"><span>Email of your account</span><input name="email" type="email" required value="' + esc(email) + '"' + (sent ? " readonly" : "") + "></label>" +
+        (sent ? '<label class="f"><span>Code from your email</span><input name="ec" inputmode="numeric" maxlength="6" required></label>' +
+          '<label class="f"><span>Code from the text message</span><input name="sc" inputmode="numeric" maxlength="6" required></label>' +
+          '<label class="f"><span>New password (at least 8 characters)</span><input name="pw" type="password" autocomplete="new-password" required></label>' +
+          '<label class="f"><span>Confirm new password</span><input name="pw2" type="password" autocomplete="new-password" required></label>' +
+          '<button class="btn full" type="submit">Change password</button>' +
+          '<button class="btn ghost full" type="button" id="fResend" style="margin-top:10px"></button>'
+          : '<button class="btn full" type="submit">Send the codes</button>') +
+        '<p class="sub" style="margin-top:14px;font-size:14px">No code arrived, or your mobile number changed? Contact the administration office.</p>' +
+        '<a class="back" href="#" id="fBack">← Back to sign in</a></form></div>';
+      $("#fBack").addEventListener("click", function (e) { e.preventDefault(); clearInterval(tick); renderLogin(); });
+      var rs = $("#fResend");
+      if (rs) {
+        var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send new codes in " + wait + " s" : "Send new codes"; };
+        upd();
+        rs.addEventListener("click", async function () {
+          try { await callReset({ action: "request", email: email }); wait = 60; upd(); toast("New codes sent."); }
+          catch (ex) { toast(errText(ex), true); }
+        });
+        clearInterval(tick);
+        tick = setInterval(function () { if (!document.body.contains(rs)) return clearInterval(tick); if (wait > 0) wait--; upd(); }, 1000);
+      }
+      $("#fForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var f = e.target, errEl = $("#fErr"), btn = $("button[type=submit]", f);
+        btn.disabled = true; errEl.hidden = true;
+        try {
+          if (!sent) {
+            email = f.email.value.trim().toLowerCase();
+            await callReset({ action: "request", email: email });
+            sent = true; wait = 60; draw();
+            return;
+          }
+          if (f.pw.value.length < 8) throw new Error("New password must be at least 8 characters.");
+          if (f.pw.value !== f.pw2.value) throw new Error("The two passwords don't match.");
+          await callReset({ action: "confirm", email: email, emailCode: f.ec.value.trim(), smsCode: f.sc.value.trim(), newPassword: f.pw.value });
+          clearInterval(tick);
+          renderLogin();
+          toast("Password changed. Sign in with your new password.");
+        } catch (ex) { errEl.textContent = errText(ex); errEl.hidden = false; btn.disabled = false; }
+      });
+    }
+    draw();
+  }
+
   function renderNewPassword() {
     $("#root").innerHTML =
       '<div class="login"><form class="login-card" id="npForm">' +
