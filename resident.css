@@ -470,7 +470,7 @@ input:disabled{opacity:.75;cursor:not-allowed}
 /* ---------- sign-in ---------- */
 .app:has(> .auth-wrap){padding:0;align-items:stretch}
 .auth-wrap{position:relative;min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 18px;background:var(--navy-dark)}
-.auth-wrap::before{content:"";position:absolute;inset:-5%;background:url("resident-login-bg.png") center/cover no-repeat;animation:kenburns 26s ease-in-out infinite alternate}
+.auth-wrap::before{content:"";position:absolute;inset:-5%;background:url("resident-login-bg.jpg") center/cover no-repeat;animation:kenburns 26s ease-in-out infinite alternate}
 .auth-wrap::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(11,26,44,.78),rgba(17,38,62,.45) 55%,rgba(194,143,60,.35))}
 @keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.1)}}
 .auth-wrap .back-link{color:#fff;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28)}

@@ -34,3 +34,7 @@
 @media (max-width: 900px) {
   .side-foot { position: sticky; right: 0; z-index: 2; padding-left: 8px !important; background: linear-gradient(90deg, rgba(88,120,170,0), #5b84a8 22%); border-radius: 0 16px 16px 0; }
 }
+
+/* Administrator sign-in uses the same building photo as the resident sign-in */
+.login-wrap { background: linear-gradient(rgba(10,32,78,.38), rgba(10,32,78,.38)), url("resident-login-bg.jpg") center/cover no-repeat !important; }
+.login-wrap::before, .login-wrap::after { display: none !important; }
