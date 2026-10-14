@@ -184,3 +184,8 @@ button.pk.pick:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0
 @keyframes dzfly{0%{opacity:1;transform:translate(0,0) rotate(0)}70%{opacity:1}100%{opacity:0;transform:translate(var(--x),calc(var(--y) + 110px)) rotate(var(--r))}}
 @media (max-width:760px){.dz-cols{grid-template-columns:minmax(0,1fr)!important}.dz-item{flex-wrap:wrap}.dz-end{flex-direction:row;align-items:center;width:100%;justify-content:space-between}.dz-ring{width:112px;height:112px}}
 @media (prefers-reduced-motion:reduce){.dz-hero.fresh .dz-ring .fg,.dz-item.flash,.dz-pay.pulse,.dz-ring.pop{animation:none}.dz-item,.dz-block,.dz-ring{transition:none}}
+
+/* booking: the selected time has an x so it can be cleared */
+.slot{position:relative}
+.slot-x{position:absolute;top:6px;right:9px;font:700 16px/1 'Source Sans 3',sans-serif;opacity:.85}
+.slot.picked:hover .slot-x{opacity:1}

@@ -151,12 +151,13 @@ function viewBook() {
     (cur.note ? '<div style="font-size:13px;background:var(--good-bg);color:var(--good-fg);border-radius:10px;padding:8px 12px;margin-bottom:10px">' + esc(cur.note) + '</div>' : "") +
     '<div class="slots">' + cur.slots.map(function (t, idx) {
       var booked = slotBooked(i, idx), picked = pick === idx, cls = booked ? "booked" : picked ? "picked" : "open";
-      return '<button class="slot ' + cls + '" ' + (booked ? "disabled" : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + (booked ? "Booked" : picked ? "Selected" : "Open") + "</span></button>";
+      return '<button class="slot ' + cls + '" ' + (booked ? "disabled" : "") + (picked ? ' title="Click again to clear" aria-label="Selected, click to clear"' : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + (booked ? "Booked" : picked ? "Selected" : "Open") + "</span>" + (picked ? '<span class="slot-x" aria-hidden="true">×</span>' : "") + "</button>";
     }).join("") + "</div></div>" +
-    (pick != null ? '<div class="card" style="background:var(--info-bg);border-color:#C7D4EF;display:flex;align-items:center;gap:16px"><div style="flex-grow:1"><div style="font-size:13px;color:var(--navy-dark)">Your request</div><div style="font:700 18px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif">' + esc(cur.name) + ", " + esc(cur.slots[pick]) + ' today</div></div><button class="btn primary" onclick="submitBooking()">Submit request</button></div>' : "") + "</div></div>";
+    (pick != null ? '<div class="card" style="background:var(--info-bg);border-color:#C7D4EF;display:flex;align-items:center;gap:16px"><div style="flex-grow:1"><div style="font-size:13px;color:var(--navy-dark)">Your request</div><div style="font:700 18px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif">' + esc(cur.name) + ", " + esc(cur.slots[pick]) + ' today</div></div><button class="btn" style="font-size:22px;line-height:1;min-width:44px;padding:0" aria-label="Clear selection" title="Clear selection" onclick="clearPick()">×</button><button class="btn primary" onclick="submitBooking()">Submit request</button></div>' : "") + "</div></div>";
 }
 function pickFacility(idx) { state.facIdx = idx; state.pick = null; render(); }
-function pickSlot(idx) { state.pick = idx; render(); }
+function pickSlot(idx) { state.pick = state.pick === idx ? null : idx; render(); }
+function clearPick() { state.pick = null; render(); }
 async function submitBooking() {
   if (state.pick == null) return;
   var f = state.facIdx, i = state.pick, unit = myUnit(), fac = facilities()[f];
