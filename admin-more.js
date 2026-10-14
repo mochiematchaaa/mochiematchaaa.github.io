@@ -578,12 +578,26 @@ function setUsageForm(unit) {
 /* ==========================================================================
    Activity log
    ========================================================================== */
+var LOG_PAGE = 15;
+/* page buttons: « ‹ 1 2 [3] 4 5 › » and a "Showing 31–45 of 120" line */
+function pagerHtml(total, page, size, fn) {
+  var pages = Math.max(1, Math.ceil(total / size)), from = total ? page * size + 1 : 0, to = Math.min(total, (page + 1) * size);
+  var lo = Math.max(0, Math.min(page - 2, pages - 5)), hi = Math.min(pages - 1, lo + 4), nums = [];
+  for (var i = lo; i <= hi; i++) nums.push('<button class="pg-btn ' + (i === page ? "on" : "") + '" ' + (i === page ? 'aria-current="page"' : "") + ' onclick="' + fn + "(" + i + ')">' + (i + 1) + "</button>");
+  return '<div class="pager"><span class="pager-info">Showing ' + from + "–" + to + " of " + total + '</span><div class="pager-btns">' +
+    '<button class="pg-btn" ' + (page === 0 ? "disabled" : "") + ' onclick="' + fn + '(0)" aria-label="First page">«</button>' +
+    '<button class="pg-btn" ' + (page === 0 ? "disabled" : "") + ' onclick="' + fn + "(" + (page - 1) + ')" aria-label="Previous page">‹ Prev</button>' + nums.join("") +
+    '<button class="pg-btn" ' + (page >= pages - 1 ? "disabled" : "") + ' onclick="' + fn + "(" + (page + 1) + ')" aria-label="Next page">Next ›</button>' +
+    '<button class="pg-btn" ' + (page >= pages - 1 ? "disabled" : "") + ' onclick="' + fn + "(" + (pages - 1) + ')" aria-label="Last page">»</button></div></div>';
+}
+function goLogPage(n) { state.logPage = Math.max(0, n); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 function viewLog() {
-  var rows = newest(list("activity"));
+  var rows = newest(list("activity")), pages = Math.max(1, Math.ceil(rows.length / LOG_PAGE));
+  var page = Math.min(Math.max(0, state.logPage || 0), pages - 1);
   return '<div class="filters"><span style="font-size:13px;color:var(--muted)">' + rows.length + ' entries</span><button class="btn" style="margin-left:auto" onclick="exportLog()">Export to Excel (.csv)</button></div>' +
-    '<div class="card" style="padding:0;overflow:hidden">' + tableRows(rows.slice(0, 300).map(function (r) {
+    '<div class="card" style="padding:0;overflow:hidden">' + tableRows(rows.slice(page * LOG_PAGE, (page + 1) * LOG_PAGE).map(function (r) {
       return '<tr><td style="color:var(--muted);white-space:nowrap">' + new Date(Number(r.v.at)).toLocaleString() + '</td><td style="font-weight:700">' + esc(r.v.area || "") + "</td><td>" + esc(r.v.title) + "</td></tr>";
-    }), ["WHEN", "AREA", "ACTION"], "Nothing has been recorded yet.") + "</div>";
+    }), ["WHEN", "AREA", "ACTION"], "Nothing has been recorded yet.") + (rows.length > LOG_PAGE ? pagerHtml(rows.length, page, LOG_PAGE, "goLogPage") : "") + "</div>";
 }
 function exportLog() { exportCSV("activity-log.csv", ["When", "Area", "Action"], newest(list("activity")).map(function (r) { return [new Date(Number(r.v.at)).toLocaleString(), r.v.area || "", r.v.title]; })); }
 
