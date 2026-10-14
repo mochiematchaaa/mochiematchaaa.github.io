@@ -509,10 +509,10 @@ function viewManage() {
   var accs = DB.accounts.filter(function (a) { return !q || (a.name + " " + a.email + " " + (a.unit || "") + " " + a.role).toLowerCase().indexOf(q) >= 0; });
   var units = unitNames();
   return '<div class="card" style="display:flex;flex-direction:column;gap:12px"><h2 style="font-size:19px">Create a resident account</h2>' +
-    '<p style="margin:0;font-size:13px;color:var(--muted)">This is the sign-up. There is no public sign-up form; every resident account is added by hand. A temporary password is shown once. The resident must choose their own password, then confirm their email and mobile number with two codes.</p>' +
+    '<p style="margin:0;font-size:13px;color:var(--muted)">This is the sign-up. There is no public sign-up form; every resident account is added by hand. A temporary password is shown once. The resident must choose their own password, then confirm their account with a code sent to their email (or by text message, when that is set up).</p>' +
     (units.length ? '<div class="manage-row" style="flex-wrap:wrap"><div class="field"><label>Full name</label><input id="mName" value="' + escAttr(m.name) + '" oninput="state.manage.name=this.value" placeholder="e.g. Ana Reyes"></div>' +
       '<div class="field"><label>Email address</label><input id="mEmail" value="' + escAttr(m.email) + '" oninput="state.manage.email=this.value" placeholder="e.g. ana@email.com"></div>' +
-      '<div class="field"><label>Mobile number</label><input id="mPhone" value="' + escAttr(m.phone) + '" oninput="state.manage.phone=this.value" placeholder="e.g. 0917 555 0000"></div>' +
+      '<div class="field"><label>Mobile number (optional)</label><input id="mPhone" value="' + escAttr(m.phone) + '" oninput="state.manage.phone=this.value" placeholder="e.g. 0917 555 0000"></div>' +
       '<div class="field" style="flex-grow:0"><label>Unit</label><select onchange="state.manage.unit=this.value">' + units.map(function (u) { return "<option " + (m.unit === u ? "selected" : "") + ">" + esc(u) + "</option>"; }).join("") + "</select></div>" +
       '<button class="btn primary" onclick="createAccount()">+ Create account</button></div>' : '<p class="hint" style="margin:0"><b>Add a unit first.</b> Every resident account belongs to a unit. <a href="#" onclick="set({view:\'units\'});return false">Go to Units</a></p>') +
     (state.manageErr ? '<div style="font-size:13px;color:#A02B1D;font-weight:600">' + esc(state.manageErr) + "</div>" : "") + "</div>" +
@@ -529,14 +529,14 @@ function viewManage() {
 }
 function accById(id) { return DB.accounts.filter(function (a) { return a.id === id; })[0]; }
 function showPassword(name, email, pw) {
-  openInfo("Temporary password", '<p>Give this to <b>' + esc(name) + "</b> (" + esc(email) + '). It is shown only now. They must choose their own password when they sign in, then enter a code sent to their email and a code sent to their mobile number.</p><p style="font:700 22px monospace;letter-spacing:.06em;background:var(--beige);padding:12px;border-radius:12px;text-align:center;user-select:all">' + esc(pw) + "</p>");
+  openInfo("Temporary password", '<p>Give this to <b>' + esc(name) + "</b> (" + esc(email) + '). It is shown only now. They must choose their own password when they sign in, then enter a code sent to their email (or by text message, when that is set up).</p><p style="font:700 22px monospace;letter-spacing:.06em;background:var(--beige);padding:12px;border-radius:12px;text-align:center;user-select:all">' + esc(pw) + "</p>");
 }
 function createAccount() {
   var m = state.manage, units = unitNames();
   var unit = m.unit || units[0];
   if (!m.name.trim() || !m.email.trim()) return set({ manageErr: "Full name and email are required." });
   if (!/^\S+@\S+\.\S+$/.test(m.email.trim())) return set({ manageErr: "Enter a valid email address." });
-  if (!/^(\+?63|0)?9\d{9}$/.test(m.phone.replace(/[\s-]/g, ""))) return set({ manageErr: "Enter a valid Philippine mobile number, e.g. 0917 555 0112." });
+  if (m.phone.trim() && !/^(\+?63|0)?9\d{9}$/.test(m.phone.replace(/[\s-]/g, ""))) return set({ manageErr: "Enter a valid Philippine mobile number, e.g. 0917 555 0112." });
   state.manageErr = "";
   act(async function () {
     var r = await callUsers({ action: "create", name: m.name.trim(), email: m.email.trim(), phone: m.phone.trim(), unit: unit });
