@@ -135,3 +135,12 @@ td.act .btn{margin-left:4px}
   .main{padding:20px 16px 60px}
   .top h1{font-size:24px}
 }
+
+/* password rules checklist */
+.rules{list-style:none;margin:-4px 0 14px;padding:0;display:grid;gap:3px}
+.rules li{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.rules li::before{content:"○";font-size:15px;line-height:1;width:16px;text-align:center}
+.rules li.ok{color:var(--good);font-weight:700}
+.rules li.ok::before{content:"✓"}
+.login-card .rules li{color:#5C6478}
+.login-card .rules li.ok{color:#2E7D55}
