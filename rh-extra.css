@@ -189,3 +189,12 @@ button.pk.pick:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0
 .slot{position:relative}
 .slot-x{position:absolute;top:6px;right:9px;font:700 16px/1 'Source Sans 3',sans-serif;opacity:.85}
 .slot.picked:hover .slot-x{opacity:1}
+
+/* pager (activity log) */
+.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--border2)}
+.pager-info{font-size:13px;color:var(--muted)}
+.pager-btns{display:flex;gap:6px;flex-wrap:wrap}
+.pg-btn{min-width:38px;height:38px;padding:0 12px;border-radius:12px;border:1.5px solid var(--border);background:var(--btn-bg);color:var(--ink);font:600 13px 'Source Sans 3',sans-serif;transition:transform .2s var(--ease),background .2s}
+.pg-btn:hover:not(:disabled){transform:translateY(-2px);background:var(--beige)}
+.pg-btn.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.pg-btn:disabled{opacity:.4;cursor:not-allowed}
