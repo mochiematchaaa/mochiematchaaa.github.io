@@ -471,31 +471,52 @@ function renderLogin(msg) {
   });
 }
 
+function chanHtml(opts, sel, info) {
+  info = info || {};
+  function one(v, title, sub, ready) {
+    return '<label class="chan' + (ready ? "" : " off") + '"><input type="radio" name="chan" value="' + v + '"' + (sel === v ? " checked" : "") + (ready ? "" : " disabled") + '><span><b>' + title + "</b><small>" +
+      (ready ? sub : "Not set up yet") + "</small></span></label>";
+  }
+  return '<div class="chans" role="radiogroup" aria-label="How should we send the code?">' +
+    one("sms", "Text message (SMS)", info.phone ? "to " + esc(info.phone) : "to your mobile number", opts.smsReady) +
+    one("email", "Email (Gmail)", info.email ? "to " + esc(info.email) : "to your email address", opts.emailReady) + "</div>";
+}
+function firstChan(opts) { return opts.smsReady ? "sms" : opts.emailReady ? "email" : ""; }
+function chanName(c) { return c === "sms" ? "text message" : "email"; }
+
 function renderForgot() {
-  var sent = false, email = "", wait = 0, tick = null;
+  var sent = false, email = "", chan = "", opts = null, wait = 0, tick = null;
   function draw(err) {
+    if (!opts) {
+      authPage("Forgot password", "CITY RESIDENCES CONDOMINIUM CORP.", '<p style="text-align:center;color:var(--muted)">Loading…</p>');
+      callFn("reset-password", { action: "options" }).then(function (r) { opts = r; chan = firstChan(r); draw(); }, function () { opts = { smsReady: true, emailReady: true }; chan = "sms"; draw(); });
+      return;
+    }
     authPage("Forgot password", "CITY RESIDENCES CONDOMINIUM CORP.",
       '<p style="font-size:13px;color:var(--muted);line-height:1.55;margin:0;text-align:center">' +
-      (sent ? "If that email belongs to an account, we sent a code to it and a text message to the mobile number on file. The codes expire in 10 minutes."
-        : "We send one code to your email and one to your mobile number, so nobody else can take over your account.") + "</p>" +
+      (sent ? "If that email belongs to an account, we sent a code by " + chanName(chan) + ". The code expires in 10 minutes."
+        : "Choose how to get a code. It is sent to the email or mobile number on file for your account, so nobody else can take it over.") + "</p>" +
       authErr("fErr", err) +
       fieldHtml("Email of your account", "email", "email", 'value="' + esc(email) + '"' + (sent ? " readonly" : "")) +
-      (sent ? fieldHtml("Code from your email", "ec", "text", 'inputmode="numeric" maxlength="6"') +
-        fieldHtml("Code from the text message", "sc", "text", 'inputmode="numeric" maxlength="6"') +
+      (sent ? fieldHtml("6-digit code (" + chanName(chan) + ")", "code", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
         pwField("New password", "pw", "new-password") + rulesHtml() + pwField("Confirm new password", "pw2", "new-password") +
-        '<button class="btn primary" type="submit">Change password</button><button class="btn" type="button" id="fResend"></button>'
-        : '<button class="btn primary" type="submit">Send the codes</button>') +
+        '<button class="btn primary" type="submit">Change password</button><button class="btn" type="button" id="fResend"></button>' +
+        '<button class="btn" type="button" id="fOther">Send it another way</button>'
+        : chanHtml(opts, chan) + (firstChan(opts) ? "" : '<div class="formerr">Sending codes is not set up yet. Please contact the administration office.</div>') +
+          '<button class="btn primary" type="submit"' + (firstChan(opts) ? "" : " disabled") + '>Send the code</button>') +
       '<p style="font-size:12px;color:var(--muted);text-align:center;margin:4px 0 0">No code arrived, or your mobile number changed? Contact the administration office.</p>' +
       '<div class="' + AUTH.links + '"><button type="button" class="linklike" id="fBack">&larr; Back to sign in</button></div>');
     bindPwToggles($("#authForm"));
     if (sent) bindRules($("#authForm [name=pw]"), $("#authForm [data-rules]"));
     $("#fBack").addEventListener("click", function () { clearInterval(tick); renderLogin(); });
+    var other = $("#fOther");
+    if (other) other.addEventListener("click", function () { sent = false; draw(); });
     var rs = $("#fResend");
     if (rs) {
-      var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send new codes in " + wait + " s" : "Send new codes"; };
+      var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send a new code in " + wait + " s" : "Send a new code"; };
       upd();
       rs.addEventListener("click", async function () {
-        try { await callFn("reset-password", { action: "request", email: email }); wait = 60; upd(); toast("New codes sent."); }
+        try { await callFn("reset-password", { action: "request", email: email, channel: chan }); wait = 60; upd(); toast("New code sent."); }
         catch (ex) { toast(errText(ex)); }
       });
       clearInterval(tick);
@@ -508,15 +529,18 @@ function renderForgot() {
       try {
         if (!sent) {
           email = f.email.value.trim().toLowerCase();
+          var pick = f.querySelector("input[name=chan]:checked");
           if (!email) throw new Error("Enter your email.");
-          await callFn("reset-password", { action: "request", email: email });
+          if (!pick) throw new Error("Choose how to get the code.");
+          chan = pick.value;
+          await callFn("reset-password", { action: "request", email: email, channel: chan });
           sent = true; wait = 60; draw();
           return;
         }
         var bad = pwProblem(f.pw.value);
         if (bad) throw new Error(bad);
         if (f.pw.value !== f.pw2.value) throw new Error("The two passwords don't match.");
-        await callFn("reset-password", { action: "confirm", email: email, emailCode: f.ec.value.trim(), smsCode: f.sc.value.trim(), newPassword: f.pw.value });
+        await callFn("reset-password", { action: "confirm", email: email, channel: chan, code: f.code.value.trim(), newPassword: f.pw.value });
         clearInterval(tick);
         renderLogin();
         toast("Password changed. Sign in with your new password.");
@@ -553,22 +577,32 @@ function renderNewPassword() {
 }
 
 function renderVerify() {
-  var sent = false, wait = 0, tick = null;
-  function draw(info, err) {
+  var sent = false, wait = 0, tick = null, opts = null, chan = "", info = {};
+  function draw(err) {
+    if (!opts) {
+      authPage("Verify your account", "CITY RESIDENCES CONDOMINIUM CORP.", '<p style="text-align:center;color:var(--muted)">Loading…</p>');
+      callFn("verify-contact", { action: "options" }).then(function (r) {
+        if (r.verified) { DB.profile.contact_verified_at = new Date().toISOString(); return boot(); }
+        opts = r; info = { email: r.email, phone: r.phone }; chan = firstChan(r); draw();
+      }, function (ex) { opts = { smsReady: false, emailReady: false }; draw(errText(ex)); });
+      return;
+    }
     authPage("Verify your account", "CITY RESIDENCES CONDOMINIUM CORP.",
       '<p style="font-size:13px;color:var(--muted);line-height:1.55;margin:0;text-align:center">' +
-      (sent ? "We sent a code to " + esc(info.email) + " and a text message to " + esc(info.phone) + ". Enter both codes. They expire in 10 minutes."
-        : "For your security, confirm your email address and mobile number. We will send one code by email and one by text message.") + "</p>" +
+      (sent ? "We sent a code by " + chanName(chan) + " to " + esc(chan === "sms" ? info.phone : info.email) + ". Enter it below. It expires in 10 minutes."
+        : "For your security, confirm your account. Choose how you want to get your code.") + "</p>" +
       authErr("vErr", err) +
-      (sent ? fieldHtml("Code from your email", "ec", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
-        fieldHtml("Code from the text message", "sc", "text", 'inputmode="numeric" maxlength="6"') +
-        '<button class="btn primary" type="submit">Verify</button><button class="btn" type="button" id="vResend"></button>'
-        : '<button class="btn primary" type="submit">Send the codes</button>') +
+      (sent ? fieldHtml("6-digit code", "code", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
+        '<button class="btn primary" type="submit">Verify</button><button class="btn" type="button" id="vResend"></button><button class="btn" type="button" id="vOther">Send it another way</button>'
+        : chanHtml(opts, chan, info) + (firstChan(opts) ? "" : '<div class="formerr">Sending codes is not set up yet. Please tell the administrator.</div>') +
+          '<button class="btn primary" type="submit"' + (firstChan(opts) ? "" : " disabled") + '>Send the code</button>') +
       '<button class="btn" type="button" id="vOut">Sign out</button>');
     $("#vOut").addEventListener("click", signOut);
+    var other = $("#vOther");
+    if (other) other.addEventListener("click", function () { sent = false; draw(); });
     var rs = $("#vResend");
     if (rs) {
-      var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send new codes in " + wait + " s" : "Send new codes"; };
+      var upd = function () { rs.disabled = wait > 0; rs.textContent = wait > 0 ? "Send a new code in " + wait + " s" : "Send a new code"; };
       upd();
       rs.addEventListener("click", function () { send().catch(function (ex) { toast(errText(ex)); }); });
       clearInterval(tick);
@@ -579,17 +613,24 @@ function renderVerify() {
       var f = e.target, errEl = $("#vErr"), btn = $("button[type=submit]", f);
       btn.disabled = true; errEl.hidden = true;
       try {
-        if (!sent) return await send();
-        var r = await callFn("verify-contact", { action: "check", emailCode: f.ec.value.trim(), smsCode: f.sc.value.trim() });
+        if (!sent) {
+          var pick = f.querySelector("input[name=chan]:checked");
+          if (!pick) throw new Error("Choose how to get the code.");
+          chan = pick.value;
+          return await send();
+        }
+        var r = await callFn("verify-contact", { action: "check", channel: chan, code: f.code.value.trim() });
         if (r.verified) { DB.profile.contact_verified_at = new Date().toISOString(); clearInterval(tick); await boot(); }
       } catch (ex) { errEl.textContent = errText(ex); errEl.hidden = false; btn.disabled = false; }
     });
   }
   async function send() {
-    var r = await callFn("verify-contact", { action: "send" });
+    var r = await callFn("verify-contact", { action: "send", channel: chan });
     if (r.verified) { DB.profile.contact_verified_at = new Date().toISOString(); return boot(); }
     sent = true; wait = r.cooldown || 60;
-    draw({ email: r.email, phone: r.phone });
+    if (r.email) info.email = r.email;
+    if (r.phone) info.phone = r.phone;
+    draw();
   }
   draw();
 }

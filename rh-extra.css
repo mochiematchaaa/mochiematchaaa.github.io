@@ -16,3 +16,16 @@
   .side { position: static !important; height: auto !important; min-height: 0 !important; }
   .shell { min-height: 0; }
 }
+
+/* Choose how to get a verification code */
+.chans { display: grid; gap: 10px; margin: 4px 0 2px; }
+.chan { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1.5px solid #d9dcec; border-radius: 14px; background: rgba(255,255,255,.7); cursor: pointer; text-align: left; }
+.chan input { width: 18px; height: 18px; accent-color: #6f66c8; flex: none; }
+.chan span { display: grid; gap: 2px; }
+.chan b { font-size: 14px; color: #263650; }
+.chan small { font-size: 12px; color: #6b7690; }
+.chan:has(input:checked) { border-color: #6f66c8; background: #f3f0ff; box-shadow: 0 0 0 3px #6f66c826; }
+.chan.off { opacity: .55; cursor: not-allowed; }
+.chans label.chan { flex-direction: row !important; align-items: center !important; gap: 12px !important; font-weight: 400; }
+.chans label.chan input { width: 18px !important; height: 18px !important; padding: 0 !important; margin: 0; }
+.chans label.chan span { text-align: left; }
