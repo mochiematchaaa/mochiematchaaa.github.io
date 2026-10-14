@@ -50,8 +50,8 @@ function greeting(){
 function todayLabel(){
   return new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
 }
-function navBtn(key,label){
-  return `<button class="${state.view===key?"active":""}" onclick="set({view:'${key}',bellOpen:false})">${icon(key)}<span>${label}</span></button>`;
+function navBtn(key,label,tag){
+  return `<button class="${state.view===key?"active":""}" onclick="set({view:'${key}',bellOpen:false})">${icon(key)}<span>${label}</span>${tag?`<em class="nav-tag">${tag}</em>`:""}</button>`;
 }
 /* Download a table as a .csv file (opens directly in Excel) */
 function exportCSV(filename, headers, rows){

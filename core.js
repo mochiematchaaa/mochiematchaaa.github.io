@@ -320,6 +320,11 @@ function payMethods() {
   });
 }
 function slotKey(f, i) { var a = facilities()[f]; return (a ? a.id : f) + "-" + i; }
+/* "5 free" for the navigation, or "" when no parking slots are set up */
+function parkingFreeTag() {
+  var all = list("slot"), free = all.filter(function (s) { return !s.v.unit; }).length;
+  return all.length ? free + " free" : "";
+}
 function slotBooked(f, i) {
   var today = dayKey(new Date());
   var b = setting("blocked");
