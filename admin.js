@@ -194,8 +194,8 @@ function viewUnits() {
     '<div class="card" style="padding:0;overflow:hidden">' + tableRows(html, ["UNIT", "RESIDENT / OWNER", "OCCUPANCY", "STATUS", "CONTACT", "USAGE", "BALANCE", ""], list("unit").length ? "No units match your search." : "No units yet. Tap “Add unit” or import a CSV.") + "</div>";
 }
 function exportUnits() {
-  exportCSV("units.csv", ["Unit", "Resident/Owner", "Occupancy", "Status", "Contact", "Usage"], sortedUnits().map(function (r) {
-    return [r.id, r.v.name || "", r.v.type || "", r.v.status || "", r.v.contact || "", usageLabel(r.v.usage)];
+  exportCSV("units.csv", ["Unit", "Resident/Owner", "Occupancy", "Status", "Contact", "Usage", "Usage details"], sortedUnits().map(function (r) {
+    return [r.id, r.v.name || "", r.v.type || "", r.v.status || "", r.v.contact || "", usageLabel(r.v.usage), r.v.statusNote || ""];
   }));
 }
 function unitsTemplate() { exportCSV("units-template.csv", ["Unit", "Household", "Occupancy", "Status", "Contact"], []); }
@@ -244,7 +244,7 @@ function showUnit(unit) {
   openModal("<h2>" + esc(unit) + "</h2><p>" + esc(u.name || "—") + "</p>" +
     '<div class="kv"><span>Occupancy</span><b>' + esc(u.type || "Owner") + "</b><span>Status</span><b>" + esc(u.status || "Occupied") + "</b><span>Contact</span><b>" + esc(u.contact || "—") +
     "</b><span>Usage</span><b>" + esc(usageLabel(u.usage)) + (needsApproval(u) ? " (" + esc(u.usageStatus || "pending") + ")" : "") + "</b>" +
-    (u.statusNote ? "<span>Note</span><b>" + esc(u.statusNote) + "</b>" : "") +
+    (usageInfoRows(u).length ? usageInfoRows(u).map(function (x) { return "<span>" + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b>"; }).join("") : (u.statusNote ? "<span>Note</span><b>" + esc(u.statusNote) + "</b>" : "")) +
     "<span>Dues</span><b>" + (bal ? peso(bal) + " unpaid" : "Settled") + "</b><span>Account</span><b>" + (acc ? esc(acc.email) : "None yet") + "</b></div>" +
     '<div class="modal-actions"><button class="btn primary" onclick="closeModal();unitForm(\'' + escAttr(unit) + '\')">Edit</button>' +
     (acc ? "" : '<button class="btn" onclick="closeModal();set({view:\'manage\',manage:Object.assign(state.manage,{unit:\'' + escAttr(unit) + '\'})})">Create account</button>') +
