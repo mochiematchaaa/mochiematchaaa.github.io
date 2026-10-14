@@ -5,9 +5,9 @@ Capstone project by **Team LockedIn**: Comcom, Camille A. · Cunanan, Ralph Vinc
 
 ## What this repository is
 
-This repository is the **public website** of City Residences (plain HTML, CSS and JavaScript, hosted on GitHub Pages). It introduces the condominium and its amenities and links to the ResidentHub app.
+This repository is the **public website** of City Residences (plain HTML, CSS and JavaScript, hosted on GitHub Pages). It introduces the condominium and its amenities, and hosts the **web portal** (`portal.html`) where the administrator and residents sign in.
 
-The working system itself is the **ResidentHub app** (Flutter, web and Android), in the repository `mochiematchaaa/Residenthub`. The web version opens from this site at `app.html`.
+The same system is also available as the **ResidentHub app** (Flutter, web and Android), in the repository `mochiematchaaa/Residenthub`; the web version opens from this site at `app.html`. The portal and the app read and write the same database rows, so they always show the same data.
 
 ## There is no sample data
 
@@ -23,8 +23,9 @@ The system starts empty. The administrator enters every detail (units, residents
 | File | What it is |
 |---|---|
 | `index.html` / `index.css` / `index.js` | Public website: the condominium and its amenities. No sign-in. |
-| `app.html` / `app.css` / `app-links.js` | The ResidentHub app inside a phone frame, plus the Android download link. |
-| `admin.html`, `resident.html` | Redirect to `app.html` (kept so old links still work). |
+| `portal.html` / `portal.css` / `portal.js` | The web portal. Administrator: units, resident accounts, dues and payments, bookings, announcements and events, grievances, expenses. Resident: home, dues and payment proof, facility booking, grievances, password. Uses supabase-js (loaded from a CDN). |
+| `app.html` / `app.css` / `app-links.js` | The full ResidentHub app inside a phone frame, plus the Android download link. |
+| `admin.html`, `resident.html` | Redirect to `portal.html` (kept so old links still work). |
 | `supabase-config.js` | Public Supabase project address and public (anon) key. |
 | `profile-refresh.css` | Shared styling. |
 | `logo.jpg`, `amenity-*.jpg` | Images. |
