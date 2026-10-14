@@ -594,7 +594,7 @@ function renderVerify() {
       authErr("vErr", err) +
       (sent ? fieldHtml("6-digit code", "code", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
         '<button class="btn primary" type="submit">Verify</button><button class="btn" type="button" id="vResend"></button><button class="btn" type="button" id="vOther">Send it another way</button>'
-        : chanHtml(opts, chan, info) + (firstChan(opts) ? "" : '<div class="formerr">Sending codes is not set up yet. Please tell the administrator.</div>') +
+        : chanHtml(opts, chan, info) + (firstChan(opts) ? "" : '<div class="formerr">Verification codes are not available right now. Please try again later.</div>') +
           '<button class="btn primary" type="submit"' + (firstChan(opts) ? "" : " disabled") + '>Send the code</button>') +
       '<button class="btn" type="button" id="vOut">Sign out</button>');
     $("#vOut").addEventListener("click", signOut);
