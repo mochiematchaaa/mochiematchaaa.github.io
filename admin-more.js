@@ -20,7 +20,7 @@ function viewFin() {
   var chosen = state.payDue ? getRow("due", state.payDue) : null;
   if (chosen && chosen.value.paid) { chosen = null; state.payDue = ""; }
   var methods = payMethods();
-  var rate = setting("dues_rate").rate, mrate = setting("motor_rate").rate;
+  var rate = setting("dues_rate").rate, mrate = setting("motor_rate").rate, drate = setting("motor_rate_daily").rate;
   return '<div class="grid cols-4">' + stats.map(function (s) { return '<div class="card"><div class="stat-label">' + s[0] + '</div><div class="stat-value">' + esc(s[1]) + "</div></div>"; }).join("") + "</div>" +
     '<div class="card" style="margin-top:16px"><h2>Payments to verify</h2><p class="hint">Residents pay at the office, by bank, GCash or Maya, then send the amount, method and reference number. Check them against your records, then confirm to issue a receipt.</p>' +
     (proofs.length ? proofs.map(function (r) {
@@ -42,9 +42,11 @@ function viewFin() {
     '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="fl" style="width:180px">Monthly dues per unit (₱)<input id="duesRate" type="number" min="0" step="0.01" value="' + escAttr(state.duesDraft != null ? state.duesDraft : (rate || "")) + '" oninput="state.duesDraft=this.value"></label><button class="btn primary" onclick="saveRate(\'dues_rate\',\'duesDraft\',\'Monthly dues\')">Save amount</button>' +
     '<span style="font-size:13px;color:var(--muted)">Current: <b>' + (rate ? peso(rate) + " per unit" : "not set yet") + '</b></span></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="billDues()">Bill monthly dues</button><button class="btn" onclick="chargeForm()">Add charge</button><button class="btn" onclick="payMethodsForm()">Payment options</button></div></div>' +
-    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Motor parking rental</h2><p class="hint" style="margin:0">Monthly rate for residents renting a motor/motorcycle parking slot. The board can change it at any time.</p>' +
-    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="fl" style="width:160px">Monthly rate (₱)<input id="motorRate" type="number" min="0" value="' + escAttr(state.motorDraft != null ? state.motorDraft : (mrate || "")) + '" oninput="state.motorDraft=this.value"></label><button class="btn primary" onclick="saveRate(\'motor_rate\',\'motorDraft\',\'Motor parking rate\')">Update rate</button>' +
-    '<span style="font-size:13px;color:var(--muted)">Current rate: <b>' + (mrate ? peso(mrate) + "/month" : "not set yet") + "</b></span></div></div></div>" +
+    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Motor parking rental</h2><p class="hint" style="margin:0">Residents rent a motor/motorcycle slot for one month or by the day. Set a rate for each. The board can change them at any time.</p>' +
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="fl" style="width:170px">Monthly rate (₱ / month)<input id="motorRate" type="number" min="0" value="' + escAttr(state.motorDraft != null ? state.motorDraft : (mrate || "")) + '" oninput="state.motorDraft=this.value"></label><button class="btn primary" onclick="saveRate(\'motor_rate\',\'motorDraft\',\'Monthly parking rate\')">Update monthly</button>' +
+    '<span style="font-size:13px;color:var(--muted)">Current: <b>' + (mrate ? peso(mrate) + "/month" : "not set yet") + "</b></span></div>" +
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="fl" style="width:170px">Daily rate (₱ / day)<input id="motorRateDay" type="number" min="0" value="' + escAttr(state.dailyDraft != null ? state.dailyDraft : (drate || "")) + '" oninput="state.dailyDraft=this.value"></label><button class="btn primary" onclick="saveRate(\'motor_rate_daily\',\'dailyDraft\',\'Daily parking rate\')">Update daily</button>' +
+    '<span style="font-size:13px;color:var(--muted)">Current: <b>' + (drate ? peso(drate) + "/day" : "not set yet (daily option hidden)") + "</b></span></div></div></div>" +
     '<aside class="fin-side"><div class="card" id="payDesk" style="display:flex;flex-direction:column;gap:10px"><h2>Record payment</h2>' +
     '<label class="fl">Resident / unit<select onchange="chooseDue(this.value)"><option value="">Select an unpaid charge</option>' + open.map(function (d) {
       return '<option value="' + escAttr(d.id) + '" ' + (state.payDue === d.id ? "selected" : "") + ">" + esc(d.v.unit) + " — " + esc(d.v.note) + "</option>";
@@ -122,7 +124,7 @@ function confirmProof(id) {
     if (p.forText === PARK_FOR && p.slot) {
       var rq = getRow("request", p.unit), sl = getRow("slot", p.slot);
       if (rq && !rq.value.confirmed && rq.value.slot === p.slot && sl && !sl.value.unit) {
-        await put("slot", p.slot, "", { id: p.slot, unit: p.unit });
+        await put("slot", p.slot, "", parkSlotFromRequest(p.slot, rq.value));
         await put("request", p.unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
         logAct("Parking slot " + p.slot + " assigned to " + p.unit + " (paid)", "Parking");
         assigned = p.slot;
@@ -383,14 +385,15 @@ function removeDoc(id) {
 function sortedSlots() { return list("slot").sort(function (a, b) { return naturalCompare(a.id, b.id); }); }
 function viewParking() {
   var slots = sortedSlots(), used = slots.filter(function (s) { return s.v.unit; }).length, rate = setting("motor_rate").rate || 0;
+  var monthly = slots.filter(function (s) { return s.v.unit && s.v.plan !== "day"; }).length, daily = used - monthly;
   var reqs = list("request").filter(function (r) { return !r.v.confirmed; }).sort(function (a, b) { return (a.v.at || 0) - (b.v.at || 0); });
   if (!slots.length) {
     return '<div class="card" style="display:flex;flex-direction:column;gap:10px;max-width:520px"><h2>Set up motor parking</h2><p class="hint" style="margin:0">There are no slots yet. Tell the system how many motor parking slots the building has. They are named M-01, M-02, and so on.</p>' +
       '<button class="btn primary" onclick="addSlotsForm()">Add slots</button></div>' + (reqs.length ? '<p class="hint" style="margin-top:12px">' + reqs.length + " resident request(s) are waiting for slots.</p>" : "");
   }
-  return '<div class="grid cols-3">' + statCard("Slots in use", used + " of " + slots.length) + statCard("Monthly parking income", peso(used * rate)) + statCard("Requests waiting", String(reqs.length)) + "</div>" +
+  return '<div class="grid cols-3">' + statCard("Slots in use", used + " of " + slots.length) + statCard("Monthly rentals income", peso(monthly * rate)) + statCard("Requests waiting", String(reqs.length)) + "</div>" +
     '<div class="two-col-r" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Motor parking slots</h2><button class="btn" onclick="addSlotsForm()">+ Add slots</button></div>' +
-    '<p class="hint">Tap a slot to assign it to a unit, release it, rename it or delete it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
+    '<p class="hint">Tap a slot to assign it, remove the resident, rename it or delete it. Rates: ' + (rate ? peso(rate) + "/month" : "monthly not set") + " · " + (setting("motor_rate_daily").rate ? peso(setting("motor_rate_daily").rate) + "/day" : "daily not set") + " (change them under Finance).</p>" +
     '<div class="slotgrid">' + slots.map(function (s) { var h = heldSlots()[s.id]; return '<button class="pslot ' + (s.v.unit ? "used" : h ? "held" : "free") + '" onclick="openSlot(\'' + escAttr(s.id) + '\')"><b>' + esc(s.id) + "</b><small>" + esc(s.v.unit || (h ? "Held · " + h : "Free")) + "</small></button>"; }).join("") + "</div></div>" +
     '<div class="card"><h2>Requests</h2><p class="hint">Residents who reserved or asked for a slot. A reserved slot is approved when its payment is confirmed.</p>' + (reqs.map(function (r) {
       var v = r.v, pr = v.slot ? parkProof(r.id, v.slot) : null, pst = pr ? pr.v.status : "", state;
@@ -403,8 +406,18 @@ function viewParking() {
         state = v.slot ? '<span class="chip info">Chose ' + esc(v.slot) + "</span>" : "";
         btns = '<button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign' + (v.slot ? " " + esc(v.slot) : "") + '</button><button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button>';
       }
-      return '<div class="req-row"><div><b>' + esc(v.unit) + "</b><small>" + esc(v.who || "") + " · " + esc(v.when || "") + (v.slot ? " · Slot " + esc(v.slot) + (v.amount ? " · " + peso(Number(v.amount)) : "") : "") + "</small>" + (state ? '<div style="margin-top:6px">' + state + "</div>" : "") + "</div><div>" + btns + "</div></div>";
-    }).join("") || '<p class="empty">No requests waiting.</p>') + "</div></div>";
+      return '<div class="req-row"><div><b>' + esc(v.unit) + "</b><small>" + esc(v.who || "") + " · " + esc(v.when || "") + (v.slot ? " · Slot " + esc(v.slot) + (v.amount ? " · " + peso(Number(v.amount)) : "") : "") + (v.plan ? " · " + esc(parkPlanText(v.plan, v.days)) : "") + "</small>" + (state ? '<div style="margin-top:6px">' + state + "</div>" : "") + "</div><div>" + btns + "</div></div>";
+    }).join("") || '<p class="empty">No requests waiting.</p>') + "</div></div>" + rentalsCard(slots);
+}
+/* who has a slot: one row each, with how long the rental runs and a Remove button */
+function rentalsCard(slots) {
+  var rows = slots.filter(function (s) { return s.v.unit; }).sort(function (a, b) { return naturalCompare(a.v.unit, b.v.unit); });
+  return '<div class="card" style="padding:0;overflow:hidden;margin-top:16px"><div style="padding:14px 18px"><h2 style="margin:0">Current rentals</h2><p class="hint" style="margin:4px 0 0">Everyone who has a slot, and whether it is rented for a month or by the day. Remove ends the rental and frees the slot.</p></div>' +
+    tableRows(rows.map(function (s) {
+      var v = s.v, exp = parkExpired(v);
+      return '<tr><td style="font-weight:700">' + esc(v.unit) + "</td><td>" + esc(s.id) + "</td><td>" + (v.plan === "day" ? "Daily" : "Monthly") + '</td><td style="color:var(--muted)">' + (v.until ? esc(usageDate(v.from)) + " – " + esc(usageDate(v.until)) : "No end date") + "</td><td>" +
+        (exp ? '<span class="chip bad">Ended</span>' : '<span class="chip good">Active</span>') + ' <button class="btn" style="min-height:32px;padding:0 10px;font-size:12px;color:#A02B1D" onclick="removeRental(\'' + escAttr(s.id) + '\')">Remove</button></td></tr>';
+    }), ["UNIT", "SLOT", "PLAN", "RENTAL PERIOD", "STATUS"], "No slot is rented yet.") + "</div>";
 }
 /* the next n slot names (M-01, M-02, ...) that no slot uses yet, so adding never overwrites a slot */
 function freshSlotIds(n) {
@@ -430,33 +443,37 @@ function addSlotsForm() {
 function openSlot(id) {
   var s = getRow("slot", id); if (!s) return;
   if (s.value.unit) {
-    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><div class="modal-actions"><button class="btn primary" onclick="releaseSlot(\'' + escAttr(id) + '\')">Release this slot</button><button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Keep</button></div>');
+    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><p class="hint" style="margin:0">' + esc(parkRentalLine(s.value) || "Monthly") + (parkExpired(s.value) ? " (ended)" : "") + (s.value.amount ? " · " + peso(Number(s.value.amount)) : "") + '</p><div class="modal-actions"><button class="btn primary" onclick="removeRental(\'' + escAttr(id) + '\')">Remove resident</button><button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Keep</button></div>');
   } else {
     var taken = vals("slot").map(function (x) { return x.unit; });
     var choices = unitNames().filter(function (u) { return taken.indexOf(u) < 0; });
     var pick = choices.length ? '<label class="fl">Unit<select id="pkUnit">' + choices.map(function (u) { return "<option>" + esc(u) + "</option>"; }).join("") + '</select></label>' : '<p class="hint">Every unit already has a slot, or there are no units yet.</p>';
-    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit to assign it to, or rename or remove the slot.</p>' + pick + '<div class="modal-actions">' + (choices.length ? '<button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button>' : "") + '<button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
+    var plan = '<label class="fl">Rental<select id="pkPlan"><option value="month">Monthly (1 month)</option><option value="day">Daily (by the day)</option></select></label><label class="fl">Number of days (daily only)<input id="pkDays" type="number" min="1" max="365" value="1"></label>';
+    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit and how long it rents it, or rename or delete the slot.</p>' + pick + (choices.length ? plan : "") + '<div class="modal-actions">' + (choices.length ? '<button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button>' : "") + '<button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
   }
 }
 function assignSlot(id) {
-  var unit = document.getElementById("pkUnit").value; closeModal();
+  var unit = document.getElementById("pkUnit").value, plan = document.getElementById("pkPlan").value, days = parseInt(document.getElementById("pkDays").value, 10) || 1;
+  closeModal();
   act(async function () {
-    await put("slot", id, "", { id: id, unit: unit });
+    var q = parkQuote(plan, days);
+    await put("slot", id, "", parkSlotValue(id, unit, q.plan, q.days, q.amount));
     var rq = getRow("request", unit);
     if (rq) await put("request", unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
-    logAct("Parking slot " + id + " assigned to " + unit, "Parking");
+    logAct("Parking slot " + id + " assigned to " + unit + " (" + parkPlanText(q.plan, q.days) + ")", "Parking");
     toast(id + " assigned to " + unit + ".");
   });
 }
-function releaseSlot(id) {
-  var s = getRow("slot", id); closeModal(); if (!s) return;
-  act(async function () {
-    var unit = s.value.unit;
+/* the admin takes a resident off a slot: the rental ends and the slot is free again */
+function removeRental(id) {
+  var s = getRow("slot", id); closeModal(); if (!s || !s.value.unit) return;
+  var unit = s.value.unit;
+  confirmBox("Remove " + unit + " from " + id + "?", "The " + (s.value.plan === "day" ? "daily" : "monthly") + " rental ends now and " + id + " becomes free for other residents. Nothing is refunded automatically.", "Remove", async function () {
     await put("slot", id, "", { id: id });
     if (getRow("request", unit)) await del("request", unit);
-    logAct("Parking slot " + id + " released from " + unit, "Parking");
-    toast("Slot released.");
-  });
+    logAct("Parking rental ended: " + unit + " removed from " + id, "Parking");
+    toast(unit + " removed. " + id + " is free.");
+  }, true);
 }
 function renameSlotForm(id) {
   var s = getRow("slot", id); closeModal(); if (!s) return;
@@ -490,9 +507,9 @@ function approveParking(unit) {
   if (!target) return toast("There are no free slots right now.");
   if (chosen && chosen.value.unit) return toast(chosen.id + " is already taken. Decline this request or ask the resident to pick another slot.");
   act(async function () {
-    await put("slot", target, "", { id: target, unit: unit });
+    await put("slot", target, "", parkSlotFromRequest(target, rq.value));
     await put("request", unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
-    logAct("Parking slot " + target + " assigned to " + unit, "Parking");
+    logAct("Parking slot " + target + " assigned to " + unit + " (" + parkPlanText(rq.value.plan, rq.value.days) + ")", "Parking");
     toast(target + " assigned to " + unit + ".");
   });
 }
@@ -502,7 +519,7 @@ function approveParkingFree(unit) {
     var rq = getRow("request", unit); if (!rq) return;
     var id = rq.value.slot; if (!id) return;
     var sl = getRow("slot", id); if (!sl || sl.value.unit) throw new Error(id + " is already taken.");
-    await put("slot", id, "", { id: id, unit: unit });
+    await put("slot", id, "", parkSlotFromRequest(id, rq.value));
     await put("request", unit, rq.unit, Object.assign({}, rq.value, { confirmed: true }));
     logAct("Parking slot " + id + " assigned to " + unit + " without payment", "Parking");
   }, true);

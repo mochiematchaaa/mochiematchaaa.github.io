@@ -323,6 +323,36 @@ function slotKey(f, i) { var a = facilities()[f]; return (a ? a.id : f) + "-" + 
 /* Motor parking: a resident picks a free slot, pays, and the office confirms the payment.
    The request row holds the chosen slot ("slot") and the rental ("amount"). */
 var PARK_FOR = "Motor parking rental";
+/* the two ways to rent a slot: for one month, or by the day */
+function motorRates() { return { month: setting("motor_rate").rate || 0, day: setting("motor_rate_daily").rate || 0 }; }
+function parkPlanText(plan, days) { return plan === "day" ? "Daily" + (days ? " · " + days + " day" + (days === 1 ? "" : "s") : "") : "Monthly"; }
+function parkQuote(plan, days) {
+  var r = motorRates();
+  if (plan === "day") { var d = Math.max(1, Math.min(365, Math.round(Number(days)) || 1)); return { plan: "day", days: d, amount: r.day * d }; }
+  return { plan: "month", days: 0, amount: r.month };
+}
+function isoOf(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+/* the last day of a rental that starts on `from` (yyyy-mm-dd): one month later, or `days` days */
+function parkUntil(plan, days, from) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(from), y = +m[1], mo = +m[2] - 1, d = +m[3];
+  if (plan === "day") return isoOf(new Date(y, mo, d + Math.max(1, days || 1) - 1));
+  var last = new Date(y, mo + 2, 0).getDate();            /* days in the next month */
+  var next = new Date(y, mo + 1, Math.min(d, last));       /* same day next month, clamped */
+  return isoOf(new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1));
+}
+/* what the office writes on a slot when it gives it to a unit */
+function parkSlotValue(id, unit, plan, days, amount) {
+  var from = dayKey(new Date());
+  return { id: id, unit: unit, plan: plan || "month", from: from, until: parkUntil(plan || "month", days, from), amount: amount || 0 };
+}
+function parkExpired(v) { return !!(v && v.unit && v.until && v.until < dayKey(new Date())); }
+/* "Monthly · until Nov 14, 2026" for a slot row */
+function parkRentalLine(v) {
+  if (!v || !v.unit) return "";
+  return (v.plan === "day" ? "Daily" : "Monthly") + (v.until ? " · until " + usageDate(v.until) : "");
+}
+/* the slot value for a request a resident made (plan, days and amount were saved on it) */
+function parkSlotFromRequest(id, rq) { return parkSlotValue(id, rq.unit, rq.plan, rq.days, rq.amount); }
 /* slot name -> unit, for slots that a resident picked and has not been approved yet */
 function heldSlots() {
   var h = {};
