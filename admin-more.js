@@ -379,7 +379,7 @@ function viewParking() {
   }
   return '<div class="grid cols-3">' + statCard("Slots in use", used + " of " + slots.length) + statCard("Monthly parking income", peso(used * rate)) + statCard("Requests waiting", String(reqs.length)) + "</div>" +
     '<div class="two-col-r" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Motor parking slots</h2><button class="btn" onclick="addSlotsForm()">+ Add slots</button></div>' +
-    '<p class="hint">Tap a slot to assign it to a unit, release it, rename it or remove it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
+    '<p class="hint">Tap a slot to assign it to a unit, release it, rename it or delete it. Rate: ' + (rate ? peso(rate) + " per month" : "not set") + " (change it under Finance).</p>" +
     '<div class="slotgrid">' + slots.map(function (s) { return '<button class="pslot ' + (s.v.unit ? "used" : "free") + '" onclick="openSlot(\'' + escAttr(s.id) + '\')"><b>' + esc(s.id) + "</b><small>" + esc(s.v.unit || "Free") + "</small></button>"; }).join("") + "</div></div>" +
     '<div class="card"><h2>Requests</h2><p class="hint">Residents who asked for a slot.</p>' + (reqs.map(function (r) {
       return '<div class="req-row"><div><b>' + esc(r.v.unit) + "</b><small>" + esc(r.v.who || "") + " · " + esc(r.v.when || "") + '</small></div><div><button class="btn primary" onclick="approveParking(\'' + escAttr(r.id) + '\')">Assign</button><button class="btn" onclick="declineParking(\'' + escAttr(r.id) + '\')">Decline</button></div></div>';
@@ -409,12 +409,12 @@ function addSlotsForm() {
 function openSlot(id) {
   var s = getRow("slot", id); if (!s) return;
   if (s.value.unit) {
-    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><div class="modal-actions"><button class="btn primary" onclick="releaseSlot(\'' + escAttr(id) + '\')">Release this slot</button><button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" onclick="closeModal()">Keep</button></div>');
+    openModal("<h2>" + esc(id) + "</h2><p>Assigned to <b>" + esc(s.value.unit) + '</b>.</p><div class="modal-actions"><button class="btn primary" onclick="releaseSlot(\'' + escAttr(id) + '\')">Release this slot</button><button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Keep</button></div>');
   } else {
     var taken = vals("slot").map(function (x) { return x.unit; });
     var choices = unitNames().filter(function (u) { return taken.indexOf(u) < 0; });
     var pick = choices.length ? '<label class="fl">Unit<select id="pkUnit">' + choices.map(function (u) { return "<option>" + esc(u) + "</option>"; }).join("") + '</select></label>' : '<p class="hint">Every unit already has a slot, or there are no units yet.</p>';
-    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit to assign it to, or rename or remove the slot.</p>' + pick + '<div class="modal-actions">' + (choices.length ? '<button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button>' : "") + '<button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Remove</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
+    openModal("<h2>" + esc(id) + '</h2><p>This slot is free. Choose a unit to assign it to, or rename or remove the slot.</p>' + pick + '<div class="modal-actions">' + (choices.length ? '<button class="btn primary" onclick="assignSlot(\'' + escAttr(id) + '\')">Assign slot</button>' : "") + '<button class="btn" onclick="renameSlotForm(\'' + escAttr(id) + '\')">Rename</button><button class="btn" style="color:#A02B1D" onclick="removeSlot(\'' + escAttr(id) + '\')">Delete</button><button class="btn" onclick="closeModal()">Cancel</button></div>');
   }
 }
 function assignSlot(id) {
@@ -455,10 +455,11 @@ function renameSlotForm(id) {
 }
 function removeSlot(id) {
   var s = getRow("slot", id); closeModal(); if (!s) return;
-  if (s.value.unit) return toast("Release " + id + " first, then remove it.");
-  confirmBox("Remove " + id + "?", "The slot is taken off the parking area. Nobody is using it.", "Remove", async function () {
+  var unit = s.value.unit;
+  confirmBox("Delete " + id + "?", unit ? id + " is assigned to " + unit + ". Deleting it takes the slot away from them and removes it from the parking area." : "The slot is removed from the parking area. Nobody is using it.", "Delete", async function () {
     await del("slot", id);
-    logAct("Parking slot " + id + " removed", "Parking");
+    if (unit && getRow("request", unit)) await del("request", unit);
+    logAct("Parking slot " + id + " deleted" + (unit ? " (was " + unit + ")" : ""), "Parking");
   }, true);
 }
 function approveParking(unit) {
@@ -489,7 +490,7 @@ function viewRentals() {
     '<div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">' + (flagged.length === 0 ? emptyCard("No units have declared a short-term rental or business use yet.") : flagged.map(function (r) {
       var u = r.v, chip = u.usageStatus === "approved" ? '<span class="chip good">Approved</span>' : u.usageStatus === "rejected" ? '<span class="chip bad">Rejected</span>' : '<span class="chip warn">Pending review</span>';
       return '<div class="card" style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><div><span style="font-weight:700;font-size:16px">' + esc(r.id) + '</span><span style="color:var(--muted);font-size:13px"> · ' + esc(u.name || "—") + '</span></div><span style="display:flex;gap:8px;align-items:center">' + chip + '<span class="chip ' + usageChipClass(u.usage) + '">' + esc(usageLabel(u.usage)) + "</span></span></div>" +
-        '<div style="font-size:13px;color:var(--muted)">' + esc(u.statusNote || "No additional details provided.") + "</div>" + (u.usageRemark ? '<div style="font-size:12px;color:#A02B1D">Your note to the resident: “' + esc(u.usageRemark) + "”</div>" : "") +
+        (usageInfoRows(u).length ? '<div class="kv detail-kv">' + usageInfoRows(u).map(function (x) { return "<span>" + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b>"; }).join("") + "</div>" : '<div style="font-size:13px;color:var(--muted)">' + esc(u.statusNote || "No additional details provided.") + "</div>") + (u.usageRemark ? '<div style="font-size:12px;color:#A02B1D">Your note to the resident: “' + esc(u.usageRemark) + "”</div>" : "") +
         (u.usageStatus === "pending" || !u.usageStatus ? '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border2);padding-top:10px"><div class="field" style="flex-grow:1;min-width:200px"><label style="font-size:12px;font-weight:700;color:var(--muted)">Note (optional, shown to resident if rejected)</label><input id="rentalNote-' + escAttr(r.id.replace(/\s+/g, "")) + '" placeholder="e.g. Please submit your barangay business permit"></div><button class="btn primary" onclick="rentalAct(\'' + escAttr(r.id) + '\',\'approved\')">Approve</button><button class="btn" onclick="rentalAct(\'' + escAttr(r.id) + '\',\'rejected\')">Reject</button></div>' : "") + "</div>";
     }).join("")) + "</div>" +
     '<div class="card" style="padding:0;overflow:hidden;margin-top:16px"><div style="display:flex;align-items:center;padding:14px 18px"><h2 style="font-size:19px;flex-grow:1">All units by usage</h2><button class="btn" onclick="exportUnits()">Export .csv</button></div>' +
@@ -513,7 +514,9 @@ function setUsageForm(unit) {
       { name: "note", label: "Note (tenant name, platform, business type...)", type: "textarea", value: u.statusNote }],
     onSubmit: async function (d) {
       var date = shortDate(new Date());
-      await put("unit", unit, unit, Object.assign({}, u, { usage: d.usage, usageStatus: (d.usage === "shortterm" || d.usage === "business") ? "approved" : "", usageRemark: "", statusNote: d.note, statusDate: date, status: d.usage === "vacant" ? "Vacant" : "Occupied" }));
+      var next = Object.assign({}, u, { usage: d.usage, usageStatus: (d.usage === "shortterm" || d.usage === "business") ? "approved" : "", usageRemark: "", statusNote: d.note, statusDate: date, status: d.usage === "vacant" ? "Vacant" : "Occupied" });
+      if (d.usage !== u.usage) delete next.usageInfo;
+      await put("unit", unit, unit, next);
       var sid = nextId();
       await put("statusUpdate", sid, unit, { id: sid, unit: unit, key: d.usage, note: d.note, date: date, by: "Admin" });
       logAct(unit + " status set to " + usageLabel(d.usage).toLowerCase(), "Units");
