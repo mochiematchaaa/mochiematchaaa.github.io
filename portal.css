@@ -19,14 +19,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 .boot img{width:64px;height:64px;border-radius:16px}
 
 /* login */
-.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(160deg,var(--cream),var(--cream-dark))}
-.login-card{width:100%;max-width:400px;background:var(--white);border:1px solid var(--line);border-radius:22px;padding:32px 28px;box-shadow:var(--shadow)}
+.login{position:relative;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--navy-dark,#0B1A2C);overflow:hidden;isolation:isolate}
+.login::before{content:"";position:absolute;inset:-4%;z-index:-2;background:url("resident-login-bg.png") center/cover no-repeat;animation:kenburns 26s ease-in-out infinite alternate}
+.login::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(135deg,rgba(11,26,44,.78),rgba(17,38,62,.45) 55%,rgba(194,143,60,.35))}
+@keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.login::before{animation:none}}
+.login-card{width:100%;max-width:400px;background:rgba(255,255,255,.94);color:#1C2433;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:22px;padding:32px 28px;box-shadow:var(--shadow)}
 .login-card .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
 .brand img{width:46px;height:46px;border-radius:12px}
 .brand b{display:block;font:700 20px 'Source Serif 4',serif;color:var(--navy)}
 .brand small{letter-spacing:.2em;font-size:11px;color:var(--gold-dark);font-weight:700}
-.login-card h1{font-size:26px;margin-bottom:6px}
-.login-card .sub{color:var(--muted);margin-bottom:20px;line-height:1.5}
+.login-card h1{font-size:26px;margin-bottom:6px;color:#11263E}
+.login-card .brand b{color:#11263E}
+.login-card label.f span{color:#1B3A5C}
+.login-card input{background:#fff;color:#1C2433;border-color:#E8DFCB}
+.login-card .btn{background:#11263E;color:#FBF7EF}
+.login-card .btn.ghost{background:transparent;color:#11263E;border-color:#E8DFCB}
+.login-card .sub,.login-card .back{color:#5C6478}
+.login-card .sub{color:#5C6478;margin-bottom:20px;line-height:1.5}
 .back{display:inline-block;margin-top:18px;color:var(--muted);font-size:14px}
 
 /* fields */

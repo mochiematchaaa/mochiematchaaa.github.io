@@ -28,7 +28,7 @@ The system starts empty. The administrator enters every detail (units, residents
 | `admin.html`, `resident.html` | Redirect to `portal.html` (kept so old links still work). |
 | `supabase-config.js` | Public Supabase project address and public (anon) key. |
 | `profile-refresh.css` | Shared styling. |
-| `logo.jpg`, `amenity-*.jpg` | Images. |
+| `logo.jpg`, `amenity-*.jpg`, `resident-login-bg.png` | Images (the building photo is the sign-in background). |
 
 ## Setting up the first administrator
 
