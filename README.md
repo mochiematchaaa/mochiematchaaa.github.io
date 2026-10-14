@@ -23,6 +23,7 @@ The system starts empty. The administrator enters every detail (units, residents
 | File | What it is |
 |---|---|
 | `index.html` / `index.css` / `index.js` | Public website: the condominium and its amenities. No sign-in. |
+| `portal.html` | Old address; sends visitors to `resident.html`. |
 | `admin.html` / `admin.css` / `admin.js` / `admin-more.js` | Administrator dashboard (sidebar: Dashboard, Units, Facility, Announcements, Polls, Finance, Expenses, Reports, Grievances, Parking, Rentals, Activity log, Access, Settings). |
 | `resident.html` / `resident.css` / `resident.js` | Resident dashboard (Home, Book a facility, Reservations, Dues, Events, Polls, Directory, Grievances, Documents, Unit Rental, Settings). |
 | `core.js` | Shared by both dashboards: Supabase sign-in, first-login password and contact verification, live data from the `records` table, forms and toasts. Uses supabase-js (loaded from a CDN). |
