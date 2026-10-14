@@ -140,28 +140,31 @@ function viewHome() {
    Book a facility and reservations
    ========================================================================== */
 function viewBook() {
-  var i = state.facIdx, pick = state.pick;
+  var fl = facilities();
+  if (!fl.length) return '<div class="card"><p class="empty">No facilities can be booked yet. Please check again later.</p></div>';
+  var i = Math.min(state.facIdx || 0, fl.length - 1), pick = state.pick, cur = fl[i];
   return '<div class="two-col"><div class="card facility-list"><div style="font-weight:700;font-size:13px;letter-spacing:.08em;color:var(--muted);padding:0 2px 6px">FACILITIES</div>' +
-    FACILITIES.map(function (f, idx) { return '<button class="facility-btn ' + (i === idx ? "active" : "") + '" onclick="pickFacility(' + idx + ')"><span style="font-size:15px;font-weight:700">' + esc(f.name) + "</span><small>" + esc(f.hours) + "</small></button>"; }).join("") + "</div>" +
-    '<div style="display:flex;flex-direction:column;gap:16px"><div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2 style="font-size:19px">' + esc(FACILITIES[i].name) + ' · availability today</h2><span style="font-size:13px;color:var(--muted)">Tap an open slot to request it</span></div>' +
-    (i === 0 ? '<div style="font-size:13px;background:var(--good-bg);color:var(--good-fg);border-radius:10px;padding:8px 12px;margin-bottom:10px">Free for you as a resident. Guests pay ₱150 per visit, collected at the gate.</div>' : "") +
-    '<div class="slots">' + SLOT_TIMES.map(function (t, idx) {
+    fl.map(function (f, idx) { return '<button class="facility-btn ' + (i === idx ? "active" : "") + '" onclick="pickFacility(' + idx + ')"><span style="font-size:15px;font-weight:700">' + esc(f.name) + "</span><small>" + esc(f.hours) + "</small></button>"; }).join("") + "</div>" +
+    '<div style="display:flex;flex-direction:column;gap:16px"><div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2 style="font-size:19px">' + esc(cur.name) + ' · availability today</h2><span style="font-size:13px;color:var(--muted)">Tap an open slot to request it</span></div>' +
+    (cur.note ? '<div style="font-size:13px;background:var(--good-bg);color:var(--good-fg);border-radius:10px;padding:8px 12px;margin-bottom:10px">' + esc(cur.note) + '</div>' : "") +
+    '<div class="slots">' + cur.slots.map(function (t, idx) {
       var booked = slotBooked(i, idx), picked = pick === idx, cls = booked ? "booked" : picked ? "picked" : "open";
       return '<button class="slot ' + cls + '" ' + (booked ? "disabled" : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + (booked ? "Booked" : picked ? "Selected" : "Open") + "</span></button>";
     }).join("") + "</div></div>" +
-    (pick != null ? '<div class="card" style="background:var(--info-bg);border-color:#C7D4EF;display:flex;align-items:center;gap:16px"><div style="flex-grow:1"><div style="font-size:13px;color:var(--navy-dark)">Your request</div><div style="font:700 18px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif">' + esc(FACILITIES[i].name) + ", " + esc(SLOT_TIMES[pick]) + ' today</div></div><button class="btn primary" onclick="submitBooking()">Submit request</button></div>' : "") + "</div></div>";
+    (pick != null ? '<div class="card" style="background:var(--info-bg);border-color:#C7D4EF;display:flex;align-items:center;gap:16px"><div style="flex-grow:1"><div style="font-size:13px;color:var(--navy-dark)">Your request</div><div style="font:700 18px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif">' + esc(cur.name) + ", " + esc(cur.slots[pick]) + ' today</div></div><button class="btn primary" onclick="submitBooking()">Submit request</button></div>' : "") + "</div></div>";
 }
 function pickFacility(idx) { state.facIdx = idx; state.pick = null; render(); }
 function pickSlot(idx) { state.pick = idx; render(); }
 async function submitBooking() {
   if (state.pick == null) return;
-  var f = state.facIdx, i = state.pick, unit = myUnit();
+  var f = state.facIdx, i = state.pick, unit = myUnit(), fac = facilities()[f];
+  if (!fac || !fac.slots[i]) { state.pick = null; return render(); }
   if (slotBooked(f, i)) { toast("That time is already taken."); state.pick = null; return render(); }
   var id = nextId(), now = new Date();
   DB.busy = true;
   try {
-    await put("booking", id, unit, { id: id, who: myHousehold(), unit: unit, place: FACILITIES[f].name, when: shortDate(now) + ", " + SLOT_TIMES[i], status: "Pending", day: dayKey(now), slot: i });
-    logAct("Booking request for the " + FACILITIES[f].name + ", " + unit, "Facilities");
+    await put("booking", id, unit, { id: id, who: myHousehold(), unit: unit, place: fac.name, when: shortDate(now) + ", " + fac.slots[i], status: "Pending", day: dayKey(now), slot: i });
+    logAct("Booking request for the " + fac.name + ", " + unit, "Facilities");
     toast("Request sent. You will see it under My reservations once the office decides.");
   } catch (e) {
     toast(errText(e));

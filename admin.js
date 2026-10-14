@@ -299,7 +299,7 @@ function importUnits(input) {
    Facility
    ========================================================================== */
 function bookingAt(f, i) {
-  var today = dayKey(new Date()), place = FACILITIES[f].name;
+  var today = dayKey(new Date()), place = (facilities()[f] || {}).name;
   return vals("booking").filter(function (x) { return x.day === today && Number(x.slot) === i && x.place === place && (x.status === "Pending" || x.status === "Approved"); })[0];
 }
 function viewFac() {
@@ -311,9 +311,16 @@ function viewFac() {
     return '<tr><td style="font-weight:700">' + esc(b.place) + "</td><td>" + esc(b.unit) + (b.who && b.who !== b.unit ? ' <span style="color:var(--muted)">· ' + esc(b.who) + "</span>" : "") + '</td><td style="color:var(--muted)">' + esc(b.when) + '</td><td><span class="chip ' + (b.status === "Approved" ? "good" : b.status === "Denied" ? "bad" : "warn") + '">' + esc(b.status) + '</span></td><td style="display:flex;gap:6px">' +
       (b.status === "Pending" ? '<button class="btn primary" onclick="setBooking(\'' + escAttr(r.id) + '\',\'Approved\')">Approve</button><button class="btn" onclick="setBooking(\'' + escAttr(r.id) + '\',\'Denied\')">Deny</button>' : "") + "</td></tr>";
   });
-  return '<div class="facility-today-grid">' + FACILITIES.map(function (f, fi) {
+  var fl = facilities();
+  var manage = '<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="font-size:19px;flex-grow:1">Amenities</h2><button class="btn primary" onclick="amenityForm()">+ Add amenity</button></div>' +
+    '<p class="hint">Add a new amenity, change its name, opening hours or how long one booking is. Residents see the change straight away.</p>' +
+    (fl.length ? '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">' + fl.map(function (f) {
+      return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border2);padding-top:10px"><div style="flex-grow:1;min-width:200px"><b>' + esc(f.name) + '</b><div style="font-size:13px;color:var(--muted)">' + esc(f.hours || "Set the hours") + " · " + f.slots.length + " time slot" + (f.slots.length === 1 ? "" : "s") + " of " + (Number(f.mins) || 120) + ' min</div></div>' +
+        '<button class="btn" onclick="amenityForm(\'' + escAttr(f.id) + '\')">Edit</button><button class="btn" style="color:#A02B1D" onclick="removeAmenity(\'' + escAttr(f.id) + '\')">Remove</button></div>';
+    }).join("") + "</div>" : '<p class="empty">No amenities yet. Add the first one.</p>') + "</div>";
+  return manage + '<div class="facility-today-grid">' + fl.map(function (f, fi) {
     return '<div class="card"><h2>' + esc(f.name) + ' · Availability today</h2><p class="hint">' + esc(f.hours) + " · Select an open slot to close it, or a closed slot to open it</p>" +
-      (fi === 0 ? '<p class="hint">Residents enter free; guests pay ₱150 per visit.</p>' : "") + '<div class="slots">' + SLOT_TIMES.map(function (t, i) {
+      (f.note ? '<p class="hint">' + esc(f.note) + "</p>" : "") + '<div class="slots">' + f.slots.map(function (t, i) {
         var closed = slotClosed(fi, i), bk = bookingAt(fi, i);
         var cls = closed || bk ? "booked" : "open", label = closed ? "Closed" : bk ? "Booked" : "Open";
         return '<button class="slot ' + cls + '" title="' + escAttr(bk ? bk.unit : "") + '" onclick="toggleSlot(' + fi + "," + i + ')"><b>' + esc(t) + "</b><span>" + label + "</span></button>";
@@ -328,10 +335,50 @@ function toggleSlot(f, i) {
   act(async function () {
     var today = dayKey(new Date()), cur = setting("blocked");
     var keys = cur.day === today ? (cur.keys || []).slice() : [];
-    var k = f + "-" + i, at = keys.indexOf(k);
+    var k = slotKey(f, i), at = keys.indexOf(k);
     if (at >= 0) keys.splice(at, 1); else keys.push(k);
     await put("setting", "blocked", "", { day: today, keys: keys });
   });
+}
+/* ---------- amenities ---------- */
+function amenityForm(id) {
+  var cur = id ? amenities().filter(function (a) { return a.id === id; })[0] : null;
+  var a = cur || { name: "", open: "08:00", close: "20:00", mins: 120, note: "" };
+  openForm({
+    title: cur ? "Edit " + cur.name : "Add amenity",
+    intro: "Residents can book one time slot at a time. The slots are made from the opening and closing time and the length of one booking." + (cur ? " Tip: changing the name, hours or booking length does not move requests already made today, so check them under Reservation requests." : ""),
+    fields: [
+      { name: "name", label: "Name", value: a.name, placeholder: "e.g. Gym, Basketball court, Rooftop deck" },
+      { name: "open", label: "Opens at", type: "time", value: a.open },
+      { name: "close", label: "Closes at", type: "time", value: a.close },
+      { name: "mins", label: "Length of one booking (minutes)", type: "number", value: a.mins, placeholder: "e.g. 60 or 120" },
+      { name: "note", label: "Note shown to residents (optional)", type: "textarea", value: a.note || "", placeholder: "e.g. Guests pay a fee. Bring your own towel." }
+    ],
+    onSubmit: async function (d) {
+      var name = String(d.name || "").trim(), mins = Math.round(Number(d.mins));
+      if (!name) return { error: "Enter the amenity's name." };
+      var o = toMin(d.open), c = toMin(d.close);
+      if (o == null || c == null) return { error: "Choose the opening and closing time." };
+      if (c <= o) return { error: "The closing time must be after the opening time." };
+      if (!(mins >= 15 && mins <= 480)) return { error: "A booking must be between 15 and 480 minutes." };
+      if (o + mins > c) return { error: "One booking is longer than the opening hours." };
+      var list = amenities().slice();
+      if (list.some(function (x) { return x.id !== id && x.name.toLowerCase() === name.toLowerCase(); })) return { error: name + " already exists." };
+      var rec = { id: id || "a" + Date.now(), name: name, open: String(d.open).trim(), close: String(d.close).trim(), mins: mins, note: String(d.note || "").trim() };
+      if (cur) list = list.map(function (x) { return x.id === id ? rec : x; }); else list.push(rec);
+      await put("setting", "amenities", "", { list: list });
+      logAct((cur ? "Amenity updated: " : "Amenity added: ") + name, "Facilities");
+    }
+  });
+}
+function removeAmenity(id) {
+  var a = amenities().filter(function (x) { return x.id === id; })[0]; if (!a) return;
+  var today = dayKey(new Date());
+  var live = vals("booking").filter(function (b) { return b.place === a.name && b.day === today && (b.status === "Pending" || b.status === "Approved"); }).length;
+  confirmBox("Remove " + a.name + "?", (live ? live + " booking" + (live === 1 ? " for today is" : "s for today are") + " still active. " : "") + "Past reservations stay in the list. Residents can no longer book it.", "Remove", async function () {
+    await put("setting", "amenities", "", { list: amenities().filter(function (x) { return x.id !== id; }) });
+    logAct("Amenity removed: " + a.name, "Facilities");
+  }, true);
 }
 function setBooking(id, status) {
   var row = getRow("booking", id); if (!row) return;

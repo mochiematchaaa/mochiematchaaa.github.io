@@ -19,8 +19,28 @@ var DEFAULT_PAY = [
   { name: "GCash", details: "Account name: (add name)\nNumber: (add GCash number)", enabled: false },
   { name: "Maya", details: "Account name: (add name)\nNumber: (add Maya number)", enabled: false }
 ];
-var FACILITIES = [{ name: "Swimming Pool", hours: "6:00 AM – 8:00 PM" }, { name: "Function Hall", hours: "8:00 AM – 10:00 PM" }];
-var SLOT_TIMES = ["8–10 AM", "10–12 NN", "12–2 PM", "2–4 PM", "4–6 PM", "6–8 PM", "8–10 PM"];
+/* Amenities (pool, hall, ...) are set by the administrator under Facility > Manage amenities.
+   One setting row holds them all: { list: [{ id, name, open: "06:00", close: "20:00", mins: 120, note }] }.
+   Until the administrator saves a list, these two are shown. */
+var DEFAULT_AMENITIES = [
+  { id: "pool", name: "Swimming Pool", open: "06:00", close: "20:00", mins: 120, note: "Free for residents. Guests pay ₱150 per visit, collected at the gate." },
+  { id: "hall", name: "Function Hall", open: "08:00", close: "22:00", mins: 120, note: "" }
+];
+function amenities() { var s = setting("amenities"); return Array.isArray(s.list) ? s.list : DEFAULT_AMENITIES; }
+function toMin(t) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+function clock(min) { var h = Math.floor(min / 60) % 24, m = min % 60; return { t: (h % 12 || 12) + (m ? ":" + (m < 10 ? "0" : "") + m : ""), ap: h >= 12 ? "PM" : "AM" }; }
+function hoursText(a) { var o = toMin(a.open), c = toMin(a.close); if (o == null || c == null) return ""; var x = clock(o), y = clock(c); return x.t + " " + x.ap + " – " + y.t + " " + y.ap; }
+/* the bookable times of one amenity, e.g. ["6–8 AM", "8–10 AM", ...] */
+function slotLabels(a) {
+  var o = toMin(a.open), c = toMin(a.close), n = Number(a.mins) || 120, out = [];
+  if (o == null || c == null || c <= o || n < 15) return out;
+  for (var s = o; s + n <= c; s += n) {
+    var x = clock(s), y = clock(s + n);
+    out.push(x.ap === y.ap ? x.t + "–" + y.t + " " + y.ap : x.t + " " + x.ap + "–" + y.t + " " + y.ap);
+  }
+  return out;
+}
+function facilities() { return amenities().map(function (a) { return Object.assign({}, a, { hours: hoursText(a), slots: slotLabels(a) }); }); }
 var EXP_CATS = ["Security services", "Common-area utilities", "Janitorial and maintenance", "Repairs and improvements",
   "Supplies and equipment", "Insurance", "Administration and reserve fund", "Other"];
 var EXP_AREAS = ["Whole building", "Lobby and common areas", "Swimming pool", "Function hall", "Elevators", "Parking",
@@ -224,18 +244,19 @@ function payMethods() {
     return f ? { name: d.name, details: f.details || d.details, enabled: !!f.enabled } : Object.assign({}, d, { enabled: d.name === PAY_OFFICE });
   });
 }
+function slotKey(f, i) { var a = facilities()[f]; return (a ? a.id : f) + "-" + i; }
 function slotBooked(f, i) {
   var today = dayKey(new Date());
   var b = setting("blocked");
-  if (b.day === today && (b.keys || []).indexOf(f + "-" + i) >= 0) return true;
-  var place = FACILITIES[f].name;
+  if (b.day === today && (b.keys || []).indexOf(slotKey(f, i)) >= 0) return true;
+  var a = facilities()[f]; if (!a) return false;
   return vals("booking").some(function (x) {
-    return x.day === today && Number(x.slot) === i && x.place === place && (x.status === "Pending" || x.status === "Approved");
+    return x.day === today && Number(x.slot) === i && x.place === a.name && (x.status === "Pending" || x.status === "Approved");
   });
 }
 function slotClosed(f, i) {
   var b = setting("blocked");
-  return b.day === dayKey(new Date()) && (b.keys || []).indexOf(f + "-" + i) >= 0;
+  return b.day === dayKey(new Date()) && (b.keys || []).indexOf(slotKey(f, i)) >= 0;
 }
 function pollsAll() {
   var votes = list("vote");

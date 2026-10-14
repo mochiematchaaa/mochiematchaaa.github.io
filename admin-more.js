@@ -279,8 +279,8 @@ function reportData() {
     age[m <= 0 ? 0 : m === 1 ? 1 : m === 2 ? 2 : 3]++;
   });
   var mk = thisMonthKey();
-  var fac = FACILITIES.map(function (f, i) {
-    return { label: f.name, value: vals("booking").filter(function (b) { var dd = b.day && parseShort(shortDateFromKey(b.day)); return b.status === "Approved" && b.place === f.name && dd && dd.getFullYear() * 12 + dd.getMonth() === mk; }).length, tone: ["blue", "yellow"][i] };
+  var fac = facilities().map(function (f, i) {
+    return { label: f.name, value: vals("booking").filter(function (b) { var dd = b.day && parseShort(shortDateFromKey(b.day)); return b.status === "Approved" && b.place === f.name && dd && dd.getFullYear() * 12 + dd.getMonth() === mk; }).length, tone: ["blue", "yellow", "green", "pink"][i % 4] };
   });
   return { units: units, nUnpaid: nUnpaid, gr: gr, months: months, age: age, fac: fac };
 }
