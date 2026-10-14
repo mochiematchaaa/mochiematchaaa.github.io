@@ -31,7 +31,7 @@ The system starts empty. The administrator enters every detail (units, residents
 | `app.html` / `app.css` / `app-links.js` | The full ResidentHub app inside a phone frame, plus the Android download link. |
 | `supabase-config.js` | Public Supabase project address and public (anon) key. |
 | `profile-refresh.css` | Shared styling. |
-| `logo.jpg`, `amenity-*.jpg`, `resident-login-bg.png` | Images (the building photo is the sign-in background). |
+| `logo.jpg`, `amenity-*.jpg`, `resident-login-bg.jpg` | Images (the building photo is the sign-in background). |
 
 ## Setting up the first administrator
 
