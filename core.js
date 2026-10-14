@@ -473,13 +473,13 @@ function renderLogin(msg) {
 
 function chanHtml(opts, sel, info) {
   info = info || {};
-  function one(v, title, sub, ready) {
-    return '<label class="chan' + (ready ? "" : " off") + '"><input type="radio" name="chan" value="' + v + '"' + (sel === v ? " checked" : "") + (ready ? "" : " disabled") + '><span><b>' + title + "</b><small>" +
-      (ready ? sub : "Not set up yet") + "</small></span></label>";
+  function one(v, title, sub) {
+    return '<label class="chan"><input type="radio" name="chan" value="' + v + '"' + (sel === v ? " checked" : "") + '><span><b>' + title + "</b><small>" + sub + "</small></span></label>";
   }
+  // only the ways that are set up are offered
   return '<div class="chans" role="radiogroup" aria-label="How should we send the code?">' +
-    one("sms", "Text message (SMS)", info.phone ? "to " + esc(info.phone) : "to your mobile number", opts.smsReady) +
-    one("email", "Email (Gmail)", info.email ? "to " + esc(info.email) : "to your email address", opts.emailReady) + "</div>";
+    (opts.smsReady ? one("sms", "Text message (SMS)", info.phone ? "to " + esc(info.phone) : "to your mobile number") : "") +
+    (opts.emailReady ? one("email", "Email (Gmail)", info.email ? "to " + esc(info.email) : "to your email address") : "") + "</div>";
 }
 function firstChan(opts) { return opts.smsReady ? "sms" : opts.emailReady ? "email" : ""; }
 function chanName(c) { return c === "sms" ? "text message" : "email"; }
