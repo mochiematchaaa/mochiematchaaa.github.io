@@ -366,7 +366,7 @@ var FAQ = [
   ["How do I book the pool or the Function Hall?", "Open Book a facility, pick the place, tap an open time slot and send your request. The office approves it and you will see the result under Reservations."],
   ["When are monthly dues due?", "Your balance, due dates and history are under Dues."],
   ["I rent out my unit. What do I need to do?", "Open Unit Rental and declare how your unit is used. Long-term leases are saved right away. Short-term rentals and home businesses need the administrator's approval."],
-  ["How do I request motor parking?", "Open Parking from the menu and tap Request a parking slot. The office will assign a slot when one is free."],
+  ["How do I request motor parking?", "Open Parking, tap a free slot on the map and pay the monthly rental. When the office confirms your payment, the slot is yours."],
   ["How do I report a problem in the building?", "Use Grievances to describe the concern. You can follow its status from Open to In progress to Resolved."]
 ];
 function directory() { var d = setting("directory"); return { contacts: d.contacts || [], rules: d.rules || [] }; }
