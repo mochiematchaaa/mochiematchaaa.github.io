@@ -198,6 +198,11 @@ function viewDues() {
     var d = r.v, st = d.paid ? "Paid" : isOverdue(d) ? "Overdue" : (myProofs().some(function (p) { return p.v.status === "Pending" && p.v.forText === d.note; }) ? "Pending" : "Open");
     return '<tr><td style="font-weight:600">' + esc(d.note) + "</td><td>" + peso(Number(d.amount)) + '</td><td style="color:var(--muted)">' + esc(d.dueDate || "On receipt") + '</td><td><span class="chip ' + (st === "Open" ? "info" : chipFor(st)) + '">' + st + "</span></td></tr>";
   });
+  var prq = getRow("request", myUnit());
+  if (prq && prq.value.slot && prq.value.amount && !prq.value.confirmed) {
+    var pp = parkProof(myUnit(), prq.value.slot), pst = pp ? (pp.v.status === "Confirmed" ? "Paid" : "Pending") : "Open";
+    rows.unshift('<tr><td style="font-weight:600">Motor parking rental · ' + esc(prq.value.slot) + '</td><td>' + peso(Number(prq.value.amount)) + '</td><td style="color:var(--muted)">On reservation</td><td><span class="chip ' + (pst === "Open" ? "info" : chipFor(pst)) + '">' + pst + "</span>" + (pst === "Open" ? ' <button class="btn" style="min-height:28px;padding:0 10px;font-size:12px;margin-left:6px" onclick="payForParking()">Pay</button>' : "") + "</td></tr>");
+  }
   return '<div class="two-col" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)"><div class="card" style="padding:0;overflow:hidden">' +
     (rows.length ? '<table><thead><tr><th>CHARGE</th><th>AMOUNT</th><th>DUE DATE</th><th>STATUS</th></tr></thead><tbody>' + rows.join("") + "</tbody></table>" : '<div style="padding:22px;text-align:center;color:var(--muted)">No charges yet.</div>') + "</div>" +
     '<div style="display:flex;flex-direction:column;gap:16px"><div class="card"><div style="font-size:13px;font-weight:600;color:var(--muted)">Outstanding balance</div><div style="font:700 34px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif;color:' + (bal ? "#A02B1D" : "var(--ink)") + '">' + (bal ? peso(bal) : "None") + "</div>" +
@@ -239,11 +244,14 @@ function submitPaymentProof() {
   if (!(amount > 0)) return toast("Enter the amount you paid.");
   if (ref.length < 4) return toast("Enter the reference number from your receipt or transaction.");
   var open = myOpenDues().filter(function (x) { return x.id === state.payFor; })[0];
-  var forText = open ? open.v.note : state.payFor === "parking" ? "Motor parking rental" : "Other charge";
+  var forText = open ? open.v.note : state.payFor === "parking" ? PARK_FOR : "Other charge";
   if (myProofs().some(function (p) { return p.v.status !== "Rejected" && String(p.v.reference).toLowerCase() === ref.toLowerCase() && p.v.method === state.payMethod; })) return toast("That reference number was already submitted.");
   act(async function () {
     var id = nextId();
-    await put("proof", id, myUnit(), { id: id, unit: myUnit(), payer: myHousehold(), forText: forText, method: state.payMethod, reference: ref, amount: amount, date: shortDate(new Date()), status: "Pending" });
+    var proofRec = { id: id, unit: myUnit(), payer: myHousehold(), forText: forText, method: state.payMethod, reference: ref, amount: amount, date: shortDate(new Date()), status: "Pending" };
+    var prq = getRow("request", myUnit());
+    if (forText === PARK_FOR && prq && prq.value.slot) proofRec.slot = prq.value.slot;
+    await put("proof", id, myUnit(), proofRec);
     logAct("Payment reference sent, " + myUnit(), "Finance");
     state.payFor = ""; state.payAmt = ""; state.payRef = "";
     toast("Payment details sent. The office will verify them and your receipt will appear here.");
@@ -259,37 +267,57 @@ function myPaymentsHtml() {
 }
 function slotsSorted() { return list("slot").sort(function (a, b) { return naturalCompare(a.id, b.id); }); }
 function parkingLinkHtml() {
-  var mine = slotsSorted().filter(function (s) { return s.v.unit === myUnit(); })[0], requested = !!getRow("request", myUnit());
-  return '<div class="card"><h2 style="font-size:17px;margin-bottom:4px">Motor parking</h2><p style="margin:0 0 10px;font-size:13px;color:var(--muted)">' +
-    (mine ? "Your slot is <b>" + esc(mine.id) + "</b>." : requested ? "Your request is waiting for the office." : "Rent a motor parking slot for your unit.") + '</p><button class="btn" onclick="set({view:\'parking\'})">Open Parking</button></div>';
+  var mine = slotsSorted().filter(function (s) { return s.v.unit === myUnit(); })[0], rq = getRow("request", myUnit());
+  var pick = rq && rq.value.slot, proof = pick ? parkProof(myUnit(), pick) : null;
+  var text = mine ? "Your slot is <b>" + esc(mine.id) + "</b>." : pick ? "Slot <b>" + esc(pick) + "</b> is reserved for you. " + (proof ? "Payment " + (proof.v.status === "Confirmed" ? "confirmed" : "sent, waiting for the office") + "." : "<b>" + peso(Number(rq.value.amount || 0)) + "</b> is waiting to be paid.") : rq ? "Your request is waiting for the office." : "Rent a motor parking slot for your unit.";
+  return '<div class="card"><h2 style="font-size:17px;margin-bottom:4px">Motor parking</h2><p style="margin:0 0 10px;font-size:13px;color:var(--muted)">' + text + '</p>' +
+    (pick && !proof && rq.value.amount ? '<button class="btn primary" style="margin-right:8px" onclick="payForParking()">Pay now</button>' : "") + '<button class="btn" onclick="set({view:\'parking\'})">Open Parking</button></div>';
 }
 function viewParkingPage() {
-  var slots = slotsSorted(), unit = myUnit(), rate = setting("motor_rate").rate || 0;
+  var slots = slotsSorted(), unit = myUnit(), rate = setting("motor_rate").rate || 0, held = heldSlots();
   var mine = slots.filter(function (s) { return s.v.unit === unit; })[0], req = getRow("request", unit);
-  var free = slots.filter(function (s) { return !s.v.unit; }).length;
+  var rv = req ? req.value : null, pick = rv && rv.slot ? rv.slot : "", amount = rv && rv.amount ? Number(rv.amount) : rate;
+  var proof = pick ? parkProof(unit, pick) : null, free = slots.filter(function (s) { return !s.v.unit && !held[s.id]; }).length;
   var hero;
-  if (mine) hero = '<div class="card park-hero good"><div class="park-big">' + esc(mine.id) + '</div><div><h2 style="font-size:19px;margin:0 0 2px">Your parking slot</h2><p class="hint" style="margin:0">Assigned to ' + esc(unit) + (rate ? ". Rental: <b>" + peso(rate) + " per month</b>, paid under Dues." : ".") + "</p></div></div>";
-  else if (req) hero = '<div class="card park-hero warn"><div class="park-big">…</div><div><h2 style="font-size:19px;margin:0 0 2px">Request sent</h2><p class="hint" style="margin:0 0 10px">The office will assign you a slot when one is free. You will get a notice here.</p><button class="btn" onclick="cancelParkingRequest()">Cancel my request</button></div></div>';
-  else hero = '<div class="card park-hero"><div class="park-big">P</div><div><h2 style="font-size:19px;margin:0 0 2px">You do not have a parking slot yet</h2><p class="hint" style="margin:0 0 10px">' + (slots.length ? free + " of " + slots.length + " slots are free right now." : "The office has not set up the parking slots yet. You can still send a request.") + '</p><button class="btn primary" onclick="requestMotorParking()">Request a parking slot</button></div></div>';
+  if (mine) hero = '<div class="card park-hero good"><div class="park-big">' + esc(mine.id) + '</div><div><h2 style="font-size:19px;margin:0 0 2px">Your parking slot</h2><p class="hint" style="margin:0">Assigned to ' + esc(unit) + (rate ? ". Rental: <b>" + peso(rate) + " per month</b>." : ".") + "</p></div></div>";
+  else if (req && pick) {
+    var st = proof ? (proof.v.status === "Confirmed" ? 3 : 2) : 1;
+    var steps = '<div class="rental-steps" style="margin:14px 0 8px"><div class="rental-step done"><div class="dot">✓</div><div class="lbl">Slot chosen</div></div><div class="rental-step ' + (st === 1 ? "current" : "done") + '"><div class="dot">' + (st === 1 ? "2" : "✓") + '</div><div class="lbl">Pay ' + (amount ? peso(amount) : "the rental") + '</div></div><div class="rental-step ' + (st === 3 ? "done" : st === 2 ? "current" : "") + '"><div class="dot">' + (st === 3 ? "✓" : "3") + '</div><div class="lbl">Office approves</div></div></div>';
+    var msg = st === 1 ? "Pay the rental, then send the payment details. The slot is held for you until the office decides." : st === 2 ? "Payment details sent (ref. " + esc(proof.v.reference) + "). The office will confirm and assign the slot." : "Payment confirmed. The office will assign the slot.";
+    hero = '<div class="card"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div class="park-big" style="width:72px;height:72px;font-size:22px;background:var(--warn-bg);color:var(--warn-fg)">' + esc(pick) + '</div><div style="flex:1 1 220px"><h2 style="font-size:19px;margin:0 0 2px">Slot ' + esc(pick) + ' reserved for you</h2><p class="hint" style="margin:0">' + (amount ? "Charge: <b>" + peso(amount) + " per month</b>" : "No rate set yet") + "</p></div></div>" + steps +
+      '<p class="hint" style="margin:0 0 12px">' + msg + '</p><div style="display:flex;gap:10px;flex-wrap:wrap">' + (st === 1 && amount ? '<button class="btn primary" onclick="payForParking()">Pay now</button>' : "") + (st === 1 ? '<button class="btn" onclick="cancelParkingRequest()">Cancel reservation</button>' : "") + "</div></div>";
+  } else if (req) hero = '<div class="card park-hero warn"><div class="park-big">…</div><div><h2 style="font-size:19px;margin:0 0 2px">Request sent</h2><p class="hint" style="margin:0 0 10px">The office will assign you a slot when one is free. You will get a notice here.</p><button class="btn" onclick="cancelParkingRequest()">Cancel my request</button></div></div>';
+  else hero = '<div class="card park-hero"><div class="park-big">P</div><div><h2 style="font-size:19px;margin:0 0 2px">You do not have a parking slot yet</h2><p class="hint" style="margin:0">' + (slots.length ? "Tap a free slot on the map to reserve it" + (rate ? ". Rental: <b>" + peso(rate) + " per month</b>, paid before the office approves." : ".") : "The office has not set up the parking slots yet.") + "</p></div></div>";
+  var canPick = !mine && !req && slots.length;
   var grid = slots.map(function (s) {
-    var isMine = mine && s.id === mine.id, u = s.v.unit;
-    return '<div class="pk ' + (isMine ? "mine" : u ? "taken" : "free") + '" title="' + (isMine ? "Your slot" : u ? "Taken" : "Free") + '"><b>' + esc(s.id) + "</b><small>" + (isMine ? "Yours" : u ? "Taken" : "Free") + "</small></div>";
+    var isMine = mine && s.id === mine.id, u = s.v.unit, h = held[s.id], myHold = h && h === unit;
+    var cls = isMine ? "mine" : u ? "taken" : myHold ? "held mine-held" : h ? "held" : "free", label = isMine ? "Yours" : u ? "Taken" : myHold ? "Yours" : h ? "Held" : "Free";
+    var click = (canPick && !u && !h) ? ' onclick="reserveSlot(\'' + escAttr(s.id) + '\')"' : "";
+    return "<" + (click ? "button" : "div") + ' class="pk ' + cls + (click ? " pick" : "") + '"' + click + ' title="' + label + '"><b>' + esc(s.id) + "</b><small>" + label + "</small></" + (click ? "button" : "div") + ">";
   }).join("");
   return '<div class="two-col-e"><div style="display:flex;flex-direction:column;gap:16px">' + hero +
-    (slots.length ? '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h2 style="font-size:19px">Parking map</h2><span class="hint" style="margin:0">' + free + " of " + slots.length + ' free</span></div><div class="pk-grid">' + grid + '</div><div class="pk-legend"><span><i class="free"></i>Free</span><span><i class="taken"></i>Taken</span>' + (mine ? '<span><i class="mine"></i>Yours</span>' : "") + "</div></div>" : "") +
-    '</div><div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">How it works</h2><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.8"><li>Tap Request a parking slot. One request per unit.</li><li>The office assigns a free slot to your unit.</li><li>The monthly rental' + (rate ? " (" + peso(rate) + ")" : "") + ' is paid under Dues, like any other charge.</li><li>When you no longer need the slot, tell the office and it will be released.</li></ol></div></div></div>';
+    (slots.length ? '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h2 style="font-size:19px">Parking map</h2><span class="hint" style="margin:0">' + free + " of " + slots.length + ' free' + (canPick ? " · tap a free slot" : "") + '</span></div><div class="pk-grid">' + grid + '</div><div class="pk-legend"><span><i class="free"></i>Free</span><span><i class="held"></i>Held</span><span><i class="taken"></i>Taken</span>' + (mine || pick ? '<span><i class="mine"></i>Yours</span>' : "") + "</div></div>" : "") +
+    '</div><div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">How it works</h2><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.8"><li>Tap a free slot on the map. The slot is held for you.</li><li>The monthly rental' + (rate ? " (" + peso(rate) + ")" : "") + ' shows up as a charge. Pay at the office, by bank transfer, GCash or Maya, then send the payment details.</li><li>When the office confirms your payment, the slot is yours. You get your receipt under Dues.</li></ol></div></div></div>';
+}
+function reserveSlot(id) {
+  var unit = myUnit(), rate = setting("motor_rate").rate || 0;
+  if (getRow("request", unit)) return toast("You already have a parking reservation.");
+  var sl = getRow("slot", id), held = heldSlots();
+  if (!sl || sl.value.unit || held[id]) return toast("That slot was just taken. Please pick another.");
+  confirmBox("Reserve " + id + "?", rate ? "The monthly rental is " + peso(rate) + ". The slot is held for you. Pay the rental and send the payment details, then the office approves it." : "The office will review your request.", "Reserve " + id, async function () {
+    await put("request", unit, unit, { unit: unit, who: myHousehold(), when: "Just now", at: Date.now(), slot: id, amount: rate });
+    logAct("Motor parking slot " + id + " reserved, " + unit, "Parking");
+    toast(rate ? "Reserved. Pay " + peso(rate) + " to finish." : "Request sent to the administrator.");
+  });
+}
+function payForParking() {
+  var rq = getRow("request", myUnit()); if (!rq) return;
+  set({ view: "dues", payFor: "parking", payAmt: String(rq.value.amount || setting("motor_rate").rate || "") });
 }
 function cancelParkingRequest() {
-  confirmBox("Cancel your parking request?", "You can send a new request any time.", "Cancel request", async function () { await del("request", myUnit()); logAct("Motor parking request cancelled, " + myUnit(), "Parking"); }, true);
-}
-function requestMotorParking() {
-  var unit = myUnit();
-  if (getRow("request", unit)) return toast("You already sent a request.");
-  act(async function () {
-    await put("request", unit, unit, { unit: unit, who: myHousehold(), when: "Just now", at: Date.now() });
-    logAct("Motor parking requested, " + unit, "Parking");
-    toast("Parking slot request sent to the administrator.");
-  });
+  var rq = getRow("request", myUnit()), slot = rq && rq.value.slot;
+  if (slot && parkProof(myUnit(), slot)) return toast("You already sent a payment for this slot. Please contact the office.");
+  confirmBox("Cancel your parking reservation?", "The slot is released for others. You can reserve again any time.", "Cancel reservation", async function () { await del("request", myUnit()); logAct("Motor parking request cancelled, " + myUnit(), "Parking"); }, true);
 }
 
 /* ==========================================================================
