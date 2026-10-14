@@ -83,7 +83,7 @@ function render() {
       '<div class="side-label">General</div><nav>' + navBtn("home", "Dashboard") + navBtn("units", "Units") + navBtn("fac", "Facility") + navBtn("ann", "Announcements") + navBtn("polls", "Polls") + "</nav>" +
       '<div class="side-label">Tools</div><nav>' + navBtn("fin", "Finance") +
       '<button type="button" title="Expenses" class="' + (state.view === "expenses" ? "active" : "") + '" onclick="set({view:\'expenses\'})">' + icon("fin") + "<span>Expenses</span></button>" +
-      navBtn("reports", "Reports") + navBtn("req", "Grievances") + navBtn("parking", "Parking") + navBtn("rentals", "Rentals") + "</nav>" +
+      navBtn("reports", "Reports") + navBtn("req", "Grievances") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("rentals", "Rentals") + "</nav>" +
       '<div class="side-label">Admin</div><nav>' + navBtn("log", "Activity log") + navBtn("manage", "Access") + navBtn("settings", "Settings") + "</nav>" +
       '<div class="side-foot"><button class="side-user" title="Open my profile" onclick="set({view:\'profile\'})"><span class="avatar">' + esc(initials(adminName())) + "</span><span><b>" + esc(adminName()) + "</b><small>Administrator</small></span></button>" +
       '<button class="side-out" onclick="doLogout()">' + icon("logout") + "<span>Log out</span></button></div></aside>" +

@@ -79,3 +79,8 @@
 .pk-legend i.free{background:var(--good-fg)}.pk-legend i.taken{background:var(--bad-fg)}.pk-legend i.mine{background:var(--ink)}
 .park-hero>div:last-child{flex:1 1 220px;min-width:0}
 input[id^="rentalNote-"]{width:100%;min-width:240px}.field:has(>input[id^="rentalNote-"]){display:flex;flex-direction:column;gap:6px}
+
+/* small tag on a menu item, e.g. "5 free" next to Parking */
+.side nav button .nav-tag{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.22);color:inherit;white-space:nowrap}
+.side nav button.active .nav-tag{background:rgba(0,0,0,.08)}
+@media (max-width:900px){.side nav button .nav-tag{display:none}}

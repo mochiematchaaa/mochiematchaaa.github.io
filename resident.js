@@ -95,7 +95,7 @@ function render() {
   var isHome = state.view === "home";
   keepFocus(function () {
     mountApp(app, '<div class="shell"><aside class="side"><div class="side-brand"><img src="logo.jpg" alt=""><span>ResidentHub</span></div>' +
-      '<div class="side-label">General</div><nav>' + navBtn("home", "Home") + navBtn("book", "Book a facility") + navBtn("res", "Reservations") + navBtn("dues", "Dues") + navBtn("parking", "Parking") + navBtn("events", "Events") + "</nav>" +
+      '<div class="side-label">General</div><nav>' + navBtn("home", "Home") + navBtn("book", "Book a facility") + navBtn("res", "Reservations") + navBtn("dues", "Dues") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("events", "Events") + "</nav>" +
       '<div class="side-label">Community</div><nav>' + navBtn("polls", "Polls") + navBtn("directory", "Directory") + navBtn("gr", "Grievances") + navBtn("docs", "Documents") + "</nav>" +
       '<div class="side-label">Account</div><nav>' + navBtn("rental", "Unit Rental") + navBtn("settings", "Settings") + "</nav>" +
       '<div class="side-foot"><div class="side-user"><span class="avatar">' + esc(initials(myName())) + "</span><span><b>" + esc(myName()) + "</b><small>" + esc(myUnit()) + "</small></span></div>" +
