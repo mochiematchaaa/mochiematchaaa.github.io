@@ -613,7 +613,7 @@ function viewManage() {
     (units.length ? '<div class="manage-row" style="flex-wrap:wrap"><div class="field"><label>Full name</label><input id="mName" value="' + escAttr(m.name) + '" oninput="state.manage.name=this.value" placeholder="e.g. Ana Reyes"></div>' +
       '<div class="field"><label>Email address</label><input id="mEmail" value="' + escAttr(m.email) + '" oninput="state.manage.email=this.value" placeholder="e.g. ana@email.com"></div>' +
       '<div class="field"><label>Mobile number (optional)</label><input id="mPhone" value="' + escAttr(m.phone) + '" oninput="state.manage.phone=this.value" placeholder="e.g. 0917 555 0000"></div>' +
-      '<div class="field" style="flex-grow:0"><label>Unit</label><input id="mUnit" list="mUnitList" autocomplete="off" value="' + escAttr(m.unit) + '" oninput="state.manage.unit=this.value" placeholder="Type or pick, e.g. Unit 12A"><datalist id="mUnitList">' + units.map(function (u) { return '<option value="' + escAttr(u) + '"></option>'; }).join("") + "</datalist></div>" +
+      '<div class="field" style="flex-grow:0;min-width:210px"><label>Unit</label><div class="combo"><input id="mUnit" autocomplete="off" value="' + escAttr(m.unit) + '" oninput="unitSuggest(this)" onfocus="unitSuggest(this)" onblur="unitMenuHide()" onkeydown="unitKey(event)" placeholder="e.g. Unit 12A"><div class="combo-menu" id="mUnitMenu" hidden></div></div></div>' +
       '<button class="btn primary" onclick="createAccount()">+ Create account</button></div>' : '<p class="hint" style="margin:0"><b>Add a unit first.</b> Every resident account belongs to a unit. <a href="#" onclick="set({view:\'units\'});return false">Go to Units</a></p>') +
     (state.manageErr ? '<div style="font-size:13px;color:#A02B1D;font-weight:600">' + esc(state.manageErr) + "</div>" : "") + "</div>" +
     '<div class="card" style="padding:0;overflow:hidden;margin-top:16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px"><h2 style="font-size:19px;margin:0">People with access</h2>' +
@@ -631,11 +631,39 @@ function accById(id) { return DB.accounts.filter(function (a) { return a.id === 
 function showPassword(name, email, pw) {
   openInfo("Temporary password", '<p>Give this to <b>' + esc(name) + "</b> (" + esc(email) + '). It is shown only now. They must choose their own password when they sign in, then enter a code sent to their email (or by text message, when that is set up).</p><p style="font:700 22px monospace;letter-spacing:.06em;background:var(--beige);padding:12px;border-radius:12px;text-align:center;user-select:all">' + esc(pw) + "</p>");
 }
+/* Unit box on "Create a resident account": type to search, or pick from the list (styled, not the browser's own list) */
+function unitNorm(t) { return String(t || "").toLowerCase().replace(/unit/g, "").replace(/[^a-z0-9]/g, ""); }
+function unitSuggest(inp) {
+  state.manage.unit = inp.value;
+  var menu = document.getElementById("mUnitMenu"); if (!menu) return;
+  var q = unitNorm(inp.value), raw = inp.value.trim().toLowerCase();
+  var list = unitNames().filter(function (u) { return !q || unitNorm(u).indexOf(q) >= 0 || u.toLowerCase().indexOf(raw) >= 0; });
+  menu.innerHTML = list.length
+    ? list.map(function (u, i) { return '<button type="button" class="combo-opt' + (i === 0 && q ? " on" : "") + '" onmousedown="event.preventDefault();unitPick(\'' + escAttr(u) + '\')">' + esc(u) + "</button>"; }).join("")
+    : '<div class="combo-none">No unit like that. Add it under Units first.</div>';
+  menu.hidden = false;
+}
+function unitPick(u) {
+  state.manage.unit = u;
+  var i = document.getElementById("mUnit"); if (i) i.value = u;
+  unitMenuHide();
+}
+function unitMenuHide() { var m = document.getElementById("mUnitMenu"); if (m) m.hidden = true; }
+function unitKey(e) {
+  var menu = document.getElementById("mUnitMenu"); if (!menu || menu.hidden) return;
+  var opts = Array.prototype.slice.call(menu.querySelectorAll(".combo-opt")), cur = opts.findIndex(function (o) { return o.classList.contains("on"); });
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); if (!opts.length) return;
+    var n = e.key === "ArrowDown" ? (cur + 1) % opts.length : (cur <= 0 ? opts.length - 1 : cur - 1);
+    opts.forEach(function (o, k) { o.classList.toggle("on", k === n); });
+    opts[n].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter" && cur >= 0) { e.preventDefault(); opts[cur].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); }
+  else if (e.key === "Escape") unitMenuHide();
+}
 function createAccount() {
   var m = state.manage, units = unitNames();
   /* the unit is typed (or picked from the list); "12a" and "Unit 12A" both match the unit on record */
-  var norm = function (t) { return String(t || "").toLowerCase().replace(/unit/g, "").replace(/[^a-z0-9]/g, ""); };
-  var typed = norm(m.unit), unit = typed ? units.filter(function (u) { return norm(u) === typed; })[0] : "";
+  var typed = unitNorm(m.unit), unit = typed ? units.filter(function (u) { return unitNorm(u) === typed; })[0] : "";
   if (!m.name.trim() || !m.email.trim()) return set({ manageErr: "Full name and email are required." });
   if (!/^\S+@\S+\.\S+$/.test(m.email.trim())) return set({ manageErr: "Enter a valid email address." });
   if (m.phone.trim() && !/^(\+?63|0)?9\d{9}$/.test(m.phone.replace(/[\s-]/g, ""))) return set({ manageErr: "Enter a valid Philippine mobile number, e.g. 0917 555 0112." });
