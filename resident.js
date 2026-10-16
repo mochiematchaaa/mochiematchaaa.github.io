@@ -2,7 +2,7 @@
 
 var state = {
   authed: false, view: "home", darkMode: false, bellOpen: false, bellSeen: false,
-  facIdx: 0, pick: null, eventFilter: "all", pollFilter: "open",
+  facIdx: 0, pick: null, bookDay: "", calMonth: "", eventFilter: "all", pollFilter: "open",
   payFor: "", payAmt: "", payMethod: "", payRef: "",
   usage: "", usageInfo: {}, usageInfoFor: "", usageMsg: ""
 };
@@ -141,33 +141,86 @@ function viewHome() {
 /* ==========================================================================
    Book a facility and reservations
    ========================================================================== */
+var BK_ICON = {
+  pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c2 0 2-1.5 4-1.5S9 17 11 17s2-1.5 4-1.5S17 17 19 17s1-.6 2-1"/><path d="M3 21c2 0 2-1.5 4-1.5S9 21 11 21s2-1.5 4-1.5S17 21 19 21s1-.6 2-1"/><path d="M8 14V6a2 2 0 013-1.7M14 14V6a2 2 0 013-1.7M8 9h6"/></svg>',
+  hall: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>'
+};
+function bookDay() {
+  var today = dayKey(new Date()), d = state.bookDay;
+  if (!d || d < today) d = today;
+  return d;
+}
+function calMonthKey() { return state.calMonth || bookDay().slice(0, 7); }
+function bookLabel(day) { var d = keyToDate(day); return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : day; }
+function maxBookDay() { var d = new Date(); d.setDate(d.getDate() + BOOK_AHEAD_DAYS); return dayKey(d); }
+function bookCalendarHtml(f) {
+  var mk = calMonthKey(), y = +mk.slice(0, 4), m = +mk.slice(5, 7) - 1, today = dayKey(new Date()), last = maxBookDay(), sel = bookDay();
+  var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), cells = [];
+  for (var b = 0; b < first.getDay(); b++) cells.push('<span class="bk-day pad"></span>');
+  for (var d = 1; d <= days; d++) {
+    var key = y + "-" + pad(m + 1) + "-" + pad(d), c = dayCounts(f, key), cls, sub;
+    if (key < today) { cls = "past"; sub = "Past date"; }
+    else if (key > last) { cls = "past"; sub = "Not open yet"; }
+    else if (c.open === c.total) { cls = "vacant"; sub = c.open + " available"; }
+    else if (c.open === 0) { cls = c.booked + c.closed > 0 ? "full" : "pend"; sub = c.booked + c.closed > 0 ? "Fully booked" : "Pending"; }
+    else { cls = c.pending > 0 && !c.booked ? "pend" : "part"; sub = c.open + " available"; }
+    var off = cls === "past";
+    cells.push('<button class="bk-day ' + cls + (key === sel ? " sel" : "") + '" ' + (off ? "disabled" : 'onclick="pickDay(\'' + key + '\')"') + ' aria-label="' + esc(bookLabel(key) + ", " + sub) + '"><b>' + d + "</b><small>" + sub + "</small>" + (key === today ? "<em>Today</em>" : "") + "</button>");
+  }
+  var prevOk = (y + "-" + pad(m + 1)) > today.slice(0, 7), nextOk = (y + "-" + pad(m + 1)) < last.slice(0, 7);
+  return '<div class="card bk-cal"><div class="bk-cal-h"><button class="pg-btn" ' + (prevOk ? "" : "disabled") + ' onclick="shiftMonth(-1)" aria-label="Previous month">←</button><h2>' + MONTHS_LONG[m] + " " + y + '</h2><button class="pg-btn" ' + (nextOk ? "" : "disabled") + ' onclick="shiftMonth(1)" aria-label="Next month">→</button></div>' +
+    '<div class="bk-cal-sub"><span>' + esc(facilities()[f].name) + '</span><button class="link-btn" onclick="goToday()">Today</button></div>' +
+    '<div class="bk-week">' + ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(function (w) { return "<span>" + w + "</span>"; }).join("") + '</div><div class="bk-grid">' + cells.join("") + "</div>" +
+    '<div class="bk-legend"><span class="vacant">Vacant</span><span class="part">Partly booked</span><span class="full">Occupied</span><span class="pend">Pending request</span></div>' +
+    '<p class="hint" style="margin:8px 0 0">Availability is shown per ' + esc(String(facilities()[f].mins || 120)) + '-minute time slot. Pending requests hold their slot until the office reviews them.</p></div>';
+}
+var MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 function viewBook() {
   var fl = facilities();
   if (!fl.length) return '<div class="card"><p class="empty">No facilities can be booked yet. Please check again later.</p></div>';
-  var i = Math.min(state.facIdx || 0, fl.length - 1), pick = state.pick, cur = fl[i];
-  return '<div class="two-col"><div class="card facility-list"><div style="font-weight:700;font-size:13px;letter-spacing:.08em;color:var(--muted);padding:0 2px 6px">FACILITIES</div>' +
-    fl.map(function (f, idx) { return '<button class="facility-btn ' + (i === idx ? "active" : "") + '" onclick="pickFacility(' + idx + ')"><span style="font-size:15px;font-weight:700">' + esc(f.name) + "</span><small>" + esc(f.hours) + "</small></button>"; }).join("") + "</div>" +
-    '<div style="display:flex;flex-direction:column;gap:16px"><div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2 style="font-size:19px">' + esc(cur.name) + ' · availability today</h2><span style="font-size:13px;color:var(--muted)">Tap an open slot to request it</span></div>' +
-    (cur.note ? '<div style="font-size:13px;background:var(--good-bg);color:var(--good-fg);border-radius:10px;padding:8px 12px;margin-bottom:10px">' + esc(cur.note) + '</div>' : "") +
-    '<div class="slots">' + cur.slots.map(function (t, idx) {
-      var booked = slotBooked(i, idx), picked = pick === idx, cls = booked ? "booked" : picked ? "picked" : "open";
-      return '<button class="slot ' + cls + '" ' + (booked ? "disabled" : "") + (picked ? ' title="Click again to clear" aria-label="Selected, click to clear"' : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + (booked ? "Booked" : picked ? "Selected" : "Open") + "</span>" + (picked ? '<span class="slot-x" aria-hidden="true">×</span>' : "") + "</button>";
-    }).join("") + "</div></div>" +
-    (pick != null ? '<div class="card" style="background:var(--info-bg);border-color:#C7D4EF;display:flex;align-items:center;gap:16px"><div style="flex-grow:1"><div style="font-size:13px;color:var(--navy-dark)">Your request</div><div style="font:700 18px \'Bricolage Grotesque\',\'Source Sans 3\',sans-serif">' + esc(cur.name) + ", " + esc(cur.slots[pick]) + ' today</div></div><button class="btn" style="font-size:22px;line-height:1;min-width:44px;padding:0" aria-label="Clear selection" title="Clear selection" onclick="clearPick()">×</button><button class="btn primary" onclick="submitBooking()">Submit request</button></div>' : "") + "</div></div>";
+  var i = Math.min(state.facIdx || 0, fl.length - 1), pick = state.pick, cur = fl[i], day = bookDay(), c = dayCounts(i, day);
+  var cards = fl.map(function (f, idx) {
+    var k = dayCounts(idx, day);
+    return '<button class="bk-fac ' + (i === idx ? "active" : "") + '" onclick="pickFacility(' + idx + ')"><span class="bk-fic">' + (BK_ICON[f.id] || BK_ICON.hall) + '</span><span class="bk-ftxt"><b>' + esc(f.name) + "</b><small>" + esc(f.hours) + "</small>" + (f.note ? "<small>" + esc(f.note) + "</small>" : "") +
+      '<span class="bk-chips"><i class="good">' + k.open + ' vacant</i><i class="bad">' + (k.booked + k.closed) + ' occupied</i><i class="warn">' + k.pending + " pending</i></span></span></button>";
+  }).join("");
+  var slots = cur.slots.map(function (t, idx) {
+    var st = slotState(i, idx, day), picked = pick === idx && st === "open";
+    var cls = picked ? "picked" : st === "open" ? "open" : st === "pending" ? "pending" : st === "past" || st === "closed" ? "off" : "booked";
+    var lab = picked ? "Selected" : st === "open" ? "Vacant" : st === "pending" ? "Pending" : st === "past" || st === "closed" ? "Unavailable" : "Booked";
+    return '<button class="slot ' + cls + '" ' + (st === "open" ? "" : "disabled") + (picked ? ' title="Click again to clear"' : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + lab + "</span>" + (picked ? '<span class="slot-x" aria-hidden="true">×</span>' : "") + "</button>";
+  }).join("");
+  var req = pick != null && slotState(i, pick, day) === "open" ? '<div class="bk-req"><div><div class="bk-req-k">Your reservation request</div><div class="bk-req-v">' + esc(cur.name) + "</div><div class=\"bk-req-s\">" + esc(bookLabel(day)) + " · " + esc(cur.slots[pick]) + '</div></div><div class="bk-req-b"><button class="btn primary" onclick="submitBooking()">Request this time</button><button class="btn" style="font-size:20px;line-height:1;min-width:44px;padding:0" aria-label="Clear selection" title="Clear selection" onclick="clearPick()">×</button></div></div>' : '<p class="hint" style="margin:6px 0 0">Pick an open time to send a request.</p>';
+  return '<div class="bk-wrap"><div class="bk-facs">' + cards + '</div><p class="hint" style="margin:0">Slot counts for ' + esc(bookLabel(day)) + ". Select a facility, date, and available time.</p>" +
+    '<div class="bk-cols">' + bookCalendarHtml(i) +
+    '<div class="card bk-day-card"><h2 style="font-size:19px">' + esc(cur.name) + '</h2><p class="hint" style="margin:2px 0 10px">' + esc(bookLabel(day)) + '</p><label class="dz-lab">Choose a date<input type="date" min="' + dayKey(new Date()) + '" max="' + maxBookDay() + '" value="' + day + '" onchange="pickDay(this.value)"></label>' +
+    (cur.note ? '<div class="bk-note">' + esc(cur.note) + "</div>" : "") + '<div class="slots bk-slots">' + (slots || '<p class="empty">No times are set up for this amenity.</p>') + "</div>" + req + "</div></div></div>";
 }
 function pickFacility(idx) { state.facIdx = idx; state.pick = null; render(); }
+function pickDay(key) {
+  var today = dayKey(new Date());
+  if (!keyToDate(key)) return;
+  if (key < today) key = today;
+  if (key > maxBookDay()) key = maxBookDay();
+  state.bookDay = key; state.calMonth = key.slice(0, 7); state.pick = null; render();
+}
+function shiftMonth(n) {
+  var mk = calMonthKey(), d = new Date(+mk.slice(0, 4), +mk.slice(5, 7) - 1 + n, 1);
+  state.calMonth = d.getFullYear() + "-" + pad(d.getMonth() + 1); render();
+}
+function goToday() { pickDay(dayKey(new Date())); }
 function pickSlot(idx) { state.pick = state.pick === idx ? null : idx; render(); }
 function clearPick() { state.pick = null; render(); }
 async function submitBooking() {
   if (state.pick == null) return;
-  var f = state.facIdx, i = state.pick, unit = myUnit(), fac = facilities()[f];
-  if (!fac || !fac.slots[i]) { state.pick = null; return render(); }
-  if (slotBooked(f, i)) { toast("That time is already taken."); state.pick = null; return render(); }
-  var id = nextId(), now = new Date();
+  var f = state.facIdx, i = state.pick, unit = myUnit(), fac = facilities()[f], day = bookDay(), date = keyToDate(day);
+  if (!fac || !fac.slots[i] || !date) { state.pick = null; return render(); }
+  if (slotState(f, i, day) !== "open") { toast("That time is no longer available."); state.pick = null; return render(); }
+  var id = nextId();
   DB.busy = true;
   try {
-    await put("booking", id, unit, { id: id, who: myHousehold(), unit: unit, place: fac.name, when: shortDate(now) + ", " + fac.slots[i], status: "Pending", day: dayKey(now), slot: i });
-    logAct("Booking request for the " + fac.name + ", " + unit, "Facilities");
+    await put("booking", id, unit, { id: id, who: myHousehold(), unit: unit, place: fac.name, when: shortDate(date) + ", " + fac.slots[i], status: "Pending", day: day, slot: i });
+    logAct("Booking request for the " + fac.name + " on " + shortDate(date) + ", " + unit, "Facilities");
     toast("Request sent. You will see it under My reservations once the office decides.");
   } catch (e) {
     toast(errText(e));

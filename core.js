@@ -377,6 +377,28 @@ function slotBooked(f, i) {
     return x.day === today && Number(x.slot) === i && x.place === a.name && (x.status === "Pending" || x.status === "Approved");
   });
 }
+/* ---------- booking by date ---------- */
+var BOOK_AHEAD_DAYS = 90;
+function keyToDate(k) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
+function slotStartMin(a, i) { return (toMin(a.open) || 0) + i * (Number(a.mins) || 120); }
+/* what one time of one amenity looks like on one day: past | closed | booked | pending | open */
+function slotState(f, i, day) {
+  var a = facilities()[f]; if (!a) return "closed";
+  var now = new Date(), today = dayKey(now);
+  if (day < today) return "past";
+  if (day === today && slotStartMin(a, i) <= now.getHours() * 60 + now.getMinutes()) return "past";
+  var b = setting("blocked");
+  if (day === b.day && (b.keys || []).indexOf(slotKey(f, i)) >= 0) return "closed";
+  var hit = vals("booking").filter(function (x) { return x.day === day && Number(x.slot) === i && x.place === a.name && (x.status === "Pending" || x.status === "Approved"); })[0];
+  return hit ? (hit.status === "Approved" ? "booked" : "pending") : "open";
+}
+/* how many times of an amenity are in each state on a day */
+function dayCounts(f, day) {
+  var a = facilities()[f], c = { open: 0, booked: 0, pending: 0, closed: 0, past: 0, total: 0 };
+  if (!a) return c;
+  a.slots.forEach(function (t, i) { c[slotState(f, i, day)]++; c.total++; });
+  return c;
+}
 function slotClosed(f, i) {
   var b = setting("blocked");
   return b.day === dayKey(new Date()) && (b.keys || []).indexOf(slotKey(f, i)) >= 0;
