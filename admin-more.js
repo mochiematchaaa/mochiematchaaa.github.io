@@ -613,7 +613,7 @@ function viewManage() {
     (units.length ? '<div class="manage-row" style="flex-wrap:wrap"><div class="field"><label>Full name</label><input id="mName" value="' + escAttr(m.name) + '" oninput="state.manage.name=this.value" placeholder="e.g. Ana Reyes"></div>' +
       '<div class="field"><label>Email address</label><input id="mEmail" value="' + escAttr(m.email) + '" oninput="state.manage.email=this.value" placeholder="e.g. ana@email.com"></div>' +
       '<div class="field"><label>Mobile number (optional)</label><input id="mPhone" value="' + escAttr(m.phone) + '" oninput="state.manage.phone=this.value" placeholder="e.g. 0917 555 0000"></div>' +
-      '<div class="field" style="flex-grow:0"><label>Unit</label><select onchange="state.manage.unit=this.value">' + units.map(function (u) { return "<option " + (m.unit === u ? "selected" : "") + ">" + esc(u) + "</option>"; }).join("") + "</select></div>" +
+      '<div class="field" style="flex-grow:0"><label>Unit</label><input id="mUnit" list="mUnitList" autocomplete="off" value="' + escAttr(m.unit) + '" oninput="state.manage.unit=this.value" placeholder="Type or pick, e.g. Unit 12A"><datalist id="mUnitList">' + units.map(function (u) { return '<option value="' + escAttr(u) + '"></option>'; }).join("") + "</datalist></div>" +
       '<button class="btn primary" onclick="createAccount()">+ Create account</button></div>' : '<p class="hint" style="margin:0"><b>Add a unit first.</b> Every resident account belongs to a unit. <a href="#" onclick="set({view:\'units\'});return false">Go to Units</a></p>') +
     (state.manageErr ? '<div style="font-size:13px;color:#A02B1D;font-weight:600">' + esc(state.manageErr) + "</div>" : "") + "</div>" +
     '<div class="card" style="padding:0;overflow:hidden;margin-top:16px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px"><h2 style="font-size:19px;margin:0">People with access</h2>' +
@@ -633,17 +633,21 @@ function showPassword(name, email, pw) {
 }
 function createAccount() {
   var m = state.manage, units = unitNames();
-  var unit = m.unit || units[0];
+  /* the unit is typed (or picked from the list); "12a" and "Unit 12A" both match the unit on record */
+  var norm = function (t) { return String(t || "").toLowerCase().replace(/unit/g, "").replace(/[^a-z0-9]/g, ""); };
+  var typed = norm(m.unit), unit = typed ? units.filter(function (u) { return norm(u) === typed; })[0] : "";
   if (!m.name.trim() || !m.email.trim()) return set({ manageErr: "Full name and email are required." });
   if (!/^\S+@\S+\.\S+$/.test(m.email.trim())) return set({ manageErr: "Enter a valid email address." });
   if (m.phone.trim() && !/^(\+?63|0)?9\d{9}$/.test(m.phone.replace(/[\s-]/g, ""))) return set({ manageErr: "Enter a valid Philippine mobile number, e.g. 0917 555 0112." });
+  if (!typed) return set({ manageErr: "Type or pick the resident's unit." });
+  if (!unit) return set({ manageErr: "That unit is not on record yet. Add it under Units first, then create the account." });
   state.manageErr = "";
   act(async function () {
     var r = await callUsers({ action: "create", name: m.name.trim(), email: m.email.trim(), phone: m.phone.trim(), unit: unit });
     await loadAccounts();
     logAct("Account created: " + unit, "Access");
     var nm = m.name.trim();
-    state.manage = { name: "", email: "", phone: "", unit: unit };
+    state.manage = { name: "", email: "", phone: "", unit: "" };
     showPassword(nm, r.email, r.password);
   });
 }
