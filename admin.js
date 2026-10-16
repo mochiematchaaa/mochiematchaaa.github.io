@@ -375,8 +375,8 @@ function removeAmenity(id) {
   var a = amenities().filter(function (x) { return x.id === id; })[0]; if (!a) return;
   if (amenities().length <= 1) { toast("Keep at least one amenity so residents can still book."); return; }
   var today = dayKey(new Date());
-  var live = vals("booking").filter(function (b) { return b.place === a.name && b.day === today && (b.status === "Pending" || b.status === "Approved"); }).length;
-  confirmBox("Remove " + a.name + "?", (live ? live + " booking" + (live === 1 ? " for today is" : "s for today are") + " still active. " : "") + "Past reservations stay in the list. Residents can no longer book it.", "Remove", async function () {
+  var live = vals("booking").filter(function (b) { return b.place === a.name && b.day >= today && (b.status === "Pending" || b.status === "Approved"); }).length;
+  confirmBox("Remove " + a.name + "?", (live ? live + " upcoming booking" + (live === 1 ? " is" : "s are") + " still active. " : "") + "Past reservations stay in the list. Residents can no longer book it.", "Remove", async function () {
     await put("setting", "amenities", "", { list: amenities().filter(function (x) { return x.id !== id; }) });
     logAct("Amenity removed: " + a.name, "Facilities");
   }, true);
