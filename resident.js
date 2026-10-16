@@ -181,8 +181,8 @@ function viewBook() {
   var i = Math.min(state.facIdx || 0, fl.length - 1), pick = state.pick, cur = fl[i], day = bookDay(), c = dayCounts(i, day);
   var cards = fl.map(function (f, idx) {
     var k = dayCounts(idx, day);
-    return '<button class="bk-fac ' + (i === idx ? "active" : "") + '" onclick="pickFacility(' + idx + ')"><span class="bk-fic">' + (BK_ICON[f.id] || BK_ICON.hall) + '</span><span class="bk-ftxt"><b>' + esc(f.name) + "</b><small>" + esc(f.hours) + "</small>" + (f.note ? "<small>" + esc(f.note) + "</small>" : "") +
-      '<span class="bk-chips"><i class="good">' + k.open + ' vacant</i><i class="bad">' + (k.booked + k.closed) + ' occupied</i><i class="warn">' + k.pending + " pending</i></span></span></button>";
+    return '<button id="bk-fac-' + idx + '" class="bk-fac ' + (i === idx ? "active" : "") + '" aria-pressed="' + (i === idx) + '" onclick="pickFacility(' + idx + ')"><span class="bk-fic">' + (BK_ICON[f.id] || BK_ICON.hall) + '</span><span class="bk-ftxt"><b>' + esc(f.name) + "</b><small>" + esc(f.hours) + "</small>" + (f.note ? "<small>" + esc(f.note) + "</small>" : "") +
+      '<span class="bk-chips"><i class="good">' + k.open + ' vacant</i><i class="bad">' + (k.booked + k.closed) + ' occupied</i><i class="warn">' + k.pending + " pending</i></span></span>" + (i === idx ? '<span class="bk-sel">✓ Selected</span>' : "") + "</button>";
   }).join("");
   var slots = cur.slots.map(function (t, idx) {
     var st = slotState(i, idx, day), picked = pick === idx && st === "open";
@@ -191,12 +191,24 @@ function viewBook() {
     return '<button class="slot ' + cls + '" ' + (st === "open" ? "" : "disabled") + (picked ? ' title="Click again to clear"' : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + lab + "</span>" + (picked ? '<span class="slot-x" aria-hidden="true">×</span>' : "") + "</button>";
   }).join("");
   var req = pick != null && slotState(i, pick, day) === "open" ? '<div class="bk-req"><div><div class="bk-req-k">Your reservation request</div><div class="bk-req-v">' + esc(cur.name) + "</div><div class=\"bk-req-s\">" + esc(bookLabel(day)) + " · " + esc(cur.slots[pick]) + '</div></div><div class="bk-req-b"><button class="btn primary" onclick="submitBooking()">Request this time</button><button class="btn" style="font-size:20px;line-height:1;min-width:44px;padding:0" aria-label="Clear selection" title="Clear selection" onclick="clearPick()">×</button></div></div>' : '<p class="hint" style="margin:6px 0 0">Pick an open time to send a request.</p>';
-  return '<div class="bk-wrap"><div class="bk-facs">' + cards + '</div><p class="hint" style="margin:0">Slot counts for ' + esc(bookLabel(day)) + ". Select a facility, date, and available time.</p>" +
+  return '<div class="bk-wrap"><div class="bk-facs" onkeydown="onFacKey(event)">' + cards + '</div><p class="hint" style="margin:0">Slot counts for ' + esc(bookLabel(day)) + ". Select a facility, date, and available time.</p>" +
     '<div class="bk-cols">' + bookCalendarHtml(i) +
     '<div class="card bk-day-card"><h2 style="font-size:19px">' + esc(cur.name) + '</h2><p class="hint" style="margin:2px 0 10px">' + esc(bookLabel(day)) + '</p><label class="dz-lab">Choose a date<input type="date" min="' + dayKey(new Date()) + '" max="' + maxBookDay() + '" value="' + day + '" onchange="pickDay(this.value)"></label>' +
-    (cur.note ? '<div class="bk-note">' + esc(cur.note) + "</div>" : "") + '<div class="slots bk-slots">' + (slots || '<p class="empty">No times are set up for this amenity.</p>') + "</div>" + req + "</div></div></div>";
+    (cur.note ? '<div class="bk-note">' + esc(cur.note) + "</div>" : "") + '<div class="slots bk-slots">' + (slots || '<p class="empty">No times are set up for this amenity.</p>') + "</div>" + req + '<p class="hint" style="margin:0">Reservations are subject to approval by the office.</p></div></div></div>';
 }
 function pickFacility(idx) { state.facIdx = idx; state.pick = null; render(); }
+/* arrow keys, Home and End move between the facility cards */
+function onFacKey(e) {
+  var n = facilities().length, cur = Math.min(state.facIdx || 0, n - 1), next = cur;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (cur + 1) % n;
+  else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (cur + n - 1) % n;
+  else if (e.key === "Home") next = 0;
+  else if (e.key === "End") next = n - 1;
+  else return;
+  e.preventDefault();
+  pickFacility(next);
+  var el = document.getElementById("bk-fac-" + next); if (el) el.focus();
+}
 function pickDay(key) {
   var today = dayKey(new Date());
   if (!keyToDate(key)) return;

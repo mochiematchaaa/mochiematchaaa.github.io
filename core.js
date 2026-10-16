@@ -614,7 +614,8 @@ function renderLogin(msg) {
     '<button class="btn primary" type="submit">Continue</button>' + authErr("loginErr", msg) +
     '<div class="' + AUTH.divider + '"></div><div class="' + AUTH.links + '"><button type="button" class="linklike" id="forgotLink">Forgot password?</button></div>' +
     '<p style="font-size:12px;color:var(--muted);text-align:center;line-height:1.55;margin:6px 0 0">Access is by invitation only. There is no public sign-up — the administration office creates every account.' +
-    (admin ? ' Residents use the <a href="resident.html" style="color:var(--navy-dark);font-weight:700">Resident Login</a>.' : "") + "</p>",
+    (admin ? ' Residents use the <a href="resident.html" style="color:var(--navy-dark);font-weight:700">Resident Login</a>.' : "") + "</p>" +
+    (admin ? "" : '<section class="admin-access" aria-labelledby="admin-access-title"><h2 id="admin-access-title">Administrator access</h2><p>Manage residents, rentals, finances, and reports from the admin portal.</p><a class="admin-login-link" href="admin.html">Sign in as Admin <span aria-hidden="true">&rarr;</span></a><small>Use your administrator account on the next page.</small></section>'),
     admin ? ["Centralized dashboard", "Role-based access"] : ["Secure resident sign-in", "Bookings &amp; dues in one place"]);
   bindPwToggles($("#authForm"));
   $("#forgotLink").addEventListener("click", function () { renderForgot(); });
