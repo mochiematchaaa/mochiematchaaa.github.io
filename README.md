@@ -18,6 +18,17 @@ The system starts empty. The administrator enters every detail (units, residents
 - Only the administrator can create resident accounts. A new account gets a temporary password and the resident must set a new one at first sign-in.
 - Residents can see and change only what belongs to their own unit. This is enforced by database row-level security, not just by the screens.
 
+## Demo (sample data, no database)
+
+The folder `demo/` is a **separate preview** of the website dashboards with made-up people, units, dues, bookings and announcements. It is not connected to Supabase, so nobody can break anything.
+
+- `demo/index.html`: the demo home (links to the admin demo, the resident demo and the app demo).
+- `demo/admin.html` and `demo/resident.html`: the same screens as the real dashboards, using the real CSS and JavaScript from the parent folder.
+- `demo/demo-backend.js`: replaces Supabase. It holds the sample data in the visitor's own browser (localStorage), builds the dates around today, and adds the yellow DEMO button (reset data, switch role). Nothing is sent to a server.
+- Demo logins (password `Demo@1234`): `admin@demo.test` and `resident@demo.test` (Unit 3B). `?as=admin` or `?as=resident` signs in directly.
+- After changing `admin.html` or `resident.html` (for example a `?v=` bump), run `python3 demo/build-demo.py` to rebuild the demo copies.
+- The app demo is built from the app repository (`mochiematchaaa/Residenthub`) and opens at `/Residenthub/demo/`.
+
 ## Files
 
 | File | What it is |
