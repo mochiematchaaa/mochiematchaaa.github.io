@@ -25,8 +25,12 @@ function myDues() { return newest(list("due")).filter(function (r) { return r.un
 function myOpenDues() { return myDues().filter(function (r) { return !r.v.paid; }).sort(function (a, b) { return Number(a.id) - Number(b.id); }); }
 function myProofs() { return newest(list("proof")).filter(function (r) { return r.unit === myUnit(); }); }
 function publishedAnns() { return newest(list("announcement")).filter(function (r) { return r.v.status !== "Draft"; }); }
+/* the soonest reservation that has not happened yet (a booking made for today counts until the day ends) */
 function nextBooking() {
-  return myBookings().filter(function (r) { return r.v.status === "Pending" || r.v.status === "Approved"; })[0] || null;
+  var today = dayKey(new Date());
+  var rows = myBookings().filter(function (r) { return (r.v.status === "Pending" || r.v.status === "Approved") && (!r.v.day || r.v.day >= today); });
+  rows.sort(function (a, b) { return (a.v.day || "9999") === (b.v.day || "9999") ? (Number(a.v.slot) || 0) - (Number(b.v.slot) || 0) : ((a.v.day || "9999") < (b.v.day || "9999") ? -1 : 1); });
+  return rows[0] || null;
 }
 function eventInfo(r) {
   var e = r.v, d = parseShort(e.date), going = list("rsvp").filter(function (x) { return Number(x.v.event) === Number(r.id); }).length;
