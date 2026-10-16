@@ -112,6 +112,7 @@ if ("IntersectionObserver" in window) {
 
 /* 6. Amenity photo panels: the one you hover / tap opens up -------------- */
 var panels = $$(".panel");
+// Opens the side panel for a section of the public site.
 function openPanel(panel) {
   panels.forEach(function (p) { p.classList.remove("active"); });
   panel.classList.add("active");
@@ -148,6 +149,7 @@ var menuLinks = {};
 $$("#menu a[href^='#']").forEach(function (link) {
   menuLinks[link.getAttribute("href").slice(1)] = link;
 });
+// Highlights the menu link of the section being viewed.
 function highlight(id) {
   $$("#menu a").forEach(function (a) { a.classList.remove("active"); });
   if (menuLinks[id]) menuLinks[id].classList.add("active");
