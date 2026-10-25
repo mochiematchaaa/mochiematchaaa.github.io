@@ -13,6 +13,8 @@ for name in ("admin.html", "resident.html"):
     s = s.replace('<script src="../shared.js', '<script src="demo-backend.js?v=6"></script>\n<script src="../shared.js', 1)
     last = '../admin-more.js' if name == 'admin.html' else '../resident.js'
     s = re.sub(r'(<script src="%s[^"]*"></script>)' % re.escape(last), r'\1\n<script src="maintenance.js?v=4"></script>', s, count=1)
+    if name == 'admin.html':
+        s = s.replace('<script src="maintenance.js?v=4"></script>', '<script src="maintenance.js?v=4"></script>\n<script src="export-all.js?v=2"></script>', 1)
     s = s.replace('<title>', '<title>DEMO · ', 1)
     s = s.replace('<head>', '<head>\n<meta name="robots" content="noindex">', 1)
     open(os.path.join(here, name), "w", encoding="utf-8").write(s)
