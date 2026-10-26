@@ -716,7 +716,7 @@ function renderLogin(msg) {
   });
 }
 
-// The choice 'send code by email or text message'.
+// The way the code is sent: by email only (text-message verification is outside the scope of the system).
 function chanHtml(opts, sel, info) {
   info = info || {};
   function one(v, title, sub) {
@@ -724,11 +724,10 @@ function chanHtml(opts, sel, info) {
   }
   // only the ways that are set up are offered
   return '<div class="chans" role="radiogroup" aria-label="How should we send the code?">' +
-    (opts.smsReady ? one("sms", "Text message (SMS)", info.phone ? "to " + esc(info.phone) : "to your mobile number") : "") +
     (opts.emailReady ? one("email", "Email (Gmail)", info.email ? "to " + esc(info.email) : "to your email address") : "") + "</div>";
 }
-// The default way to send a code (text if available, else email).
-function firstChan(opts) { return opts.smsReady ? "sms" : opts.emailReady ? "email" : ""; }
+// The way to send a code: email.
+function firstChan(opts) { return opts.emailReady ? "email" : ""; }
 // 'text message' or 'email', for messages shown to the user.
 function chanName(c) { return c === "sms" ? "text message" : "email"; }
 
@@ -738,13 +737,13 @@ function renderForgot() {
   function draw(err) {
     if (!opts) {
       authPage("Forgot password", "CITY RESIDENCES CONDOMINIUM CORP.", '<p style="text-align:center;color:var(--muted)">Loading…</p>');
-      callFn("reset-password", { action: "options" }).then(function (r) { opts = r; chan = firstChan(r); draw(); }, function () { opts = { smsReady: true, emailReady: true }; chan = "sms"; draw(); });
+      callFn("reset-password", { action: "options" }).then(function (r) { opts = r; chan = firstChan(r); draw(); }, function () { opts = { emailReady: true }; chan = "email"; draw(); });
       return;
     }
     authPage("Forgot password", "CITY RESIDENCES CONDOMINIUM CORP.",
       '<p style="font-size:13px;color:var(--muted);line-height:1.55;margin:0;text-align:center">' +
       (sent ? "If that email belongs to an account, we sent a code by " + chanName(chan) + ". The code expires in 10 minutes."
-        : "Choose how to get a code. It is sent to the email or mobile number on file for your account, so nobody else can take it over.") + "</p>" +
+        : "We will email a 6-digit code to the address on file for your account, so nobody else can take it over.") + "</p>" +
       authErr("fErr", err) +
       fieldHtml("Email of your account", "email", "email", 'value="' + esc(email) + '"' + (sent ? " readonly" : "")) +
       (sent ? fieldHtml("6-digit code (" + chanName(chan) + ")", "code", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
@@ -753,7 +752,7 @@ function renderForgot() {
         '<button class="btn" type="button" id="fOther">Send it another way</button>'
         : chanHtml(opts, chan) + (firstChan(opts) ? "" : '<div class="formerr">Sending codes is not set up yet. Please contact the administration office.</div>') +
           '<button class="btn primary" type="submit"' + (firstChan(opts) ? "" : " disabled") + '>Send the code</button>') +
-      '<p style="font-size:12px;color:var(--muted);text-align:center;margin:4px 0 0">No code arrived, or your mobile number changed? Contact the administration office.</p>' +
+      '<p style="font-size:12px;color:var(--muted);text-align:center;margin:4px 0 0">No code arrived, or your email address changed? Contact the administration office.</p>' +
       '<div class="' + AUTH.links + '"><button type="button" class="linklike" id="fBack">&larr; Back to sign in</button></div>');
     bindPwToggles($("#authForm"));
     if (sent) bindRules($("#authForm [name=pw]"), $("#authForm [data-rules]"));
@@ -835,13 +834,13 @@ function renderVerify() {
       callFn("verify-contact", { action: "options" }).then(function (r) {
         if (r.verified) { DB.profile.contact_verified_at = new Date().toISOString(); return boot(); }
         opts = r; info = { email: r.email, phone: r.phone }; chan = firstChan(r); draw();
-      }, function (ex) { opts = { smsReady: false, emailReady: false }; draw(errText(ex)); });
+      }, function (ex) { opts = { emailReady: false }; draw(errText(ex)); });
       return;
     }
     authPage("Verify your account", "CITY RESIDENCES CONDOMINIUM CORP.",
       '<p style="font-size:13px;color:var(--muted);line-height:1.55;margin:0;text-align:center">' +
-      (sent ? "We sent a code by " + chanName(chan) + " to " + esc(chan === "sms" ? info.phone : info.email) + ". Enter it below. It expires in 10 minutes."
-        : "For your security, confirm your account. Choose how you want to get your code.") + "</p>" +
+      (sent ? "We sent a code by " + chanName(chan) + " to " + esc(info.email) + ". Enter it below. It expires in 10 minutes."
+        : "For your security, confirm your account. We will email you a 6-digit code.") + "</p>" +
       authErr("vErr", err) +
       (sent ? fieldHtml("6-digit code", "code", "text", 'inputmode="numeric" maxlength="6" autocomplete="one-time-code"') +
         '<button class="btn primary" type="submit">Verify</button><button class="btn" type="button" id="vResend"></button><button class="btn" type="button" id="vOther">Send it another way</button>'
