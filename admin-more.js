@@ -886,16 +886,16 @@ function contactChangeForm(channel) {
     onSubmit: async function (d) {
       if (!d.value) return { error: "Enter the new email address." };
       var sent = await callFn("admin-contact", { action: "send", channel: "email", value: d.value });
-      contactCodeForm("email", d.value, sent.sentTo);
+      contactCodeForm("email", d.value, sent.sentTo, sent.demoCode);
       return { keepOpen: true };
     }
   });
 }
 // Second step: type the code that was emailed.
-function contactCodeForm(channel, value, sentTo) {
+function contactCodeForm(channel, value, sentTo, demoCode) {
   openForm({
     title: "Enter the code",
-    intro: "We sent a 6-digit code by email to <b>" + esc(sentTo || value) + "</b>. It expires in 10 minutes. If it does not arrive, close this and request a new one after a minute.",
+    intro: "We sent a 6-digit code by email to <b>" + esc(sentTo || value) + "</b>. It expires in 10 minutes. If it does not arrive, close this and request a new one after a minute." + (demoCode ? " <b>Demo: the code is " + esc(demoCode) + ".</b>" : ""),
     fields: [{ name: "code", label: "6-digit code", placeholder: "123456" }],
     submit: "Verify and save",
     onSubmit: async function (d) {
