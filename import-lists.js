@@ -1,9 +1,9 @@
 /* ADMIN: Import a list from an Excel (.xlsx) or CSV file, on every page that has a list.
    The administrator chooses a file, the columns are matched by their names (and can be changed), a preview shows what will be
    added and what will be skipped, and one click adds the rows. This replaces typing each row by hand.
-   Lists: units, resident accounts, charges, payments received, unit status, expenses, motor parking slots, announcements, events,
-   facilities and directory contacts. Every row is saved to the database with the same put() the pages use.
-   Loaded by admin.html after admin-more.js. It uses the same helper functions as the pages (put, list, getRow, logAct...). */
+   Lists: units, resident accounts, charges, expenses, motor parking slots, announcements, events, facilities, directory contacts,
+   maintenance tasks, equipment and staff.
+   Loaded by admin.html after maintenance.js. It uses the same helper functions as the pages (put, list, getRow, logAct...). */
 (function () {
   if (window.RH_ROLE !== "admin") return;
 
@@ -131,6 +131,22 @@
   }
 
   /* ---------------------------------------------------------------- the lists */
+  var FREQ = [["Weekly", 7], ["Every 2 weeks", 14], ["Monthly", 30], ["Every 3 months", 90], ["Every 6 months", 180], ["Yearly", 365]];
+  var EQ_STATUS = ["Working", "Needs repair", "Under maintenance"];
+  var EQ_CATS = ["Elevator", "Plumbing", "Electrical", "Fire safety", "Pool", "Gym", "Air conditioning", "Security", "Other"];
+  function freqOf(t) {
+    var s = lc(t); if (!s) return FREQ[2];
+    if (/week/.test(s) && /(2|two|bi|fort)/.test(s)) return FREQ[1];
+    if (/week/.test(s)) return FREQ[0];
+    if (/(quarter|3 ?month|three month)/.test(s)) return FREQ[3];
+    if (/(semi|6 ?month|six month|half)/.test(s)) return FREQ[4];
+    if (/(year|annual|12 ?month)/.test(s)) return FREQ[5];
+    if (/month/.test(s)) return FREQ[2];
+    if (/daily|day/.test(s)) return FREQ[0];
+    return FREQ[2];
+  }
+  function cleanType(n) { return String(n || "").replace(/['"\\<>&]/g, "").replace(/\s+/g, " ").trim().slice(0, 40); }
+
   var SPECS = {
     units: {
       label: "units", file: "units",
@@ -366,6 +382,74 @@
         c.have.push(key); return { rec: { name: v.name, note: v.note, tel: v.tel }, show: {} };
       },
       saveAll: function (recs) { var d = directory(); d.contacts = d.contacts.concat(recs); return saveDirectory(d); }
+    },
+    mtasks: {
+      label: "maintenance tasks", file: "maintenance-tasks",
+      cols: [
+        { k: "title", label: "Task", req: 1, al: ["task", "title", "maintenance task", "job", "work", "activity"] },
+        { k: "due", label: "Next due date", req: 1, al: ["next due", "due", "due date", "date", "schedule date"] },
+        { k: "every", label: "How often", al: ["frequency", "every", "how often", "interval", "repeat"] },
+        { k: "kind", label: "Type (Routine, Compliance or your own)", al: ["type", "kind", "category"] },
+        { k: "equip", label: "Equipment", al: ["equipment", "asset", "machine", "for"] },
+        { k: "who", label: "Assigned to", al: ["assigned to", "assigned", "staff", "person", "technician", "in charge"] }
+      ],
+      sample: [["Generator test run", "Nov 10, 2026", "Monthly", "Routine", "Standby generator", "Dante Villanueva"]],
+      init: function () { return { have: vals("mtask").map(function (t) { return lc(t.title) + "|" + t.due; }), newTypes: {} }; },
+      check: function (v, c) {
+        if (!v.title) return skip("No task");
+        var d = toDate(v.due); if (!v.due) return skip("No due date"); if (!d) return skip("Due date is not understood");
+        var key = lc(v.title) + "|" + ymd(d); if (c.have.indexOf(key) >= 0) return skip("Already scheduled");
+        c.have.push(key);
+        var f = freqOf(v.every), k = lc(v.kind), kind = "Routine";
+        if (/compliance|permit|certificate|test|inspection/.test(k) && !/routine/.test(k)) kind = "Compliance";
+        else if (k && !/routine|regular|preventive/.test(k)) kind = cleanType(v.kind) || "Routine";
+        var eq = list("equipment").filter(function (e) { return lc(e.v.name) === lc(v.equip); })[0];
+        var st = list("staff").filter(function (s) { return lc(s.v.name) === lc(v.who); })[0];
+        if (kind !== "Routine" && kind !== "Compliance") c.newTypes[kind] = 1;
+        return { rec: { kind: kind, title: v.title, equipId: eq ? eq.id : "", equipName: eq ? eq.v.name : (v.equip || ""), every: f[0], days: f[1], due: ymd(d), staffId: st ? st.id : "", assignee: st ? st.v.name : (v.who || "") }, show: { due: ymd(d), every: f[0], kind: kind } };
+      },
+      before: async function (c) {
+        var have = list("mtype").map(function (r) { return lc(r.v.name); });
+        for (var n in c.newTypes) if (have.indexOf(lc(n)) < 0) await put("mtype", String(nextId()), "__admin", { name: n });
+      },
+      save: function (r) { var id = String(nextId()); return put("mtask", id, "", Object.assign({ id: id }, r)); }
+    },
+    equipment: {
+      label: "equipment", file: "equipment",
+      cols: [
+        { k: "name", label: "Name", req: 1, al: ["name", "equipment", "asset", "item"] },
+        { k: "category", label: "Category", al: ["category", "type"] },
+        { k: "location", label: "Location", al: ["location", "where", "area"] },
+        { k: "status", label: "Condition (Working, Needs repair, Under maintenance)", al: ["condition", "status"] },
+        { k: "vendor", label: "Supplier or service company", al: ["supplier", "vendor", "service company", "contractor"] },
+        { k: "warranty", label: "Warranty ends", al: ["warranty", "warranty ends", "warranty until"] },
+        { k: "lastService", label: "Last serviced", al: ["last serviced", "last service", "serviced"] }
+      ],
+      sample: [["Elevator A", "Elevator", "Main lobby", "Working", "Otis Services", "Dec 31, 2027", "Oct 1, 2026"]],
+      init: function () { return { have: vals("equipment").map(function (e) { return lc(e.name); }) }; },
+      check: function (v, c) {
+        if (!v.name) return skip("No name"); if (c.have.indexOf(lc(v.name)) >= 0) return skip("Already on the list");
+        c.have.push(lc(v.name));
+        var w = v.warranty ? toDate(v.warranty) : null, ls = v.lastService ? toDate(v.lastService) : null;
+        var rec = { name: v.name, category: pick(EQ_CATS, v.category, "Other"), location: v.location, status: pick(EQ_STATUS, v.status, "Working"), facility: "", closes: false, vendor: v.vendor, warranty: w ? ymd(w) : "", lastService: ls ? ymd(ls) : "" };
+        return { rec: rec, show: { category: rec.category, status: rec.status } };
+      },
+      save: function (r) { var id = String(nextId()); return put("equipment", id, "__admin", Object.assign({ id: id }, r)); }
+    },
+    staff: {
+      label: "maintenance staff", file: "maintenance-staff",
+      cols: [
+        { k: "name", label: "Name", req: 1, al: ["name", "staff", "full name", "employee"] },
+        { k: "role", label: "Role", al: ["role", "position", "job", "title", "trade"] },
+        { k: "phone", label: "Mobile number", al: ["mobile", "phone", "contact", "contact number", "mobile number"] }
+      ],
+      sample: [["Dante Villanueva", "Electrician", "0917 555 0199"]],
+      init: function () { return { have: vals("staff").map(function (s) { return lc(s.name); }) }; },
+      check: function (v, c) {
+        if (!v.name) return skip("No name"); if (c.have.indexOf(lc(v.name)) >= 0) return skip("Already on the list");
+        c.have.push(lc(v.name)); return { rec: { name: v.name, role: v.role || "Maintenance", phone: fixPhone(v.phone) }, show: {} };
+      },
+      save: function (r) { var id = String(nextId()); return put("staff", id, "__admin", Object.assign({ id: id }, r)); }
     }
   };
 
@@ -511,7 +595,8 @@
     parking: [["slots", "Import parking slots"]],
     ann: [["announcements", "Import announcements"], ["events", "Import events"]],
     fac: [["facilities", "Import facilities"]],
-    settings: [["directory", "Import directory contacts"]]
+    settings: [["directory", "Import directory contacts"]],
+    maint: [["mtasks", "Import tasks"], ["equipment", "Import equipment"], ["staff", "Import staff"]]
   };
   var prev = window.view;
   window.view = function () {
