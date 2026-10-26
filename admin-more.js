@@ -843,11 +843,60 @@ function changePasswordForm() {
     }
   });
 }
+// Popup form to change your own display name.
+function editNameForm() {
+  openForm({
+    title: "Edit name",
+    fields: [{ name: "name", label: "Full name", value: DB.profile.name || "" }],
+    onSubmit: async function (d) {
+      if (!d.name) return { error: "Enter your name." };
+      var r = await sb.from("profiles").update({ name: d.name }).eq("id", DB.user.id);
+      if (r.error) return { error: r.error.message };
+      DB.profile.name = d.name;
+      logAct("Administrator name changed", "Profile");
+      toast("Name saved.");
+    }
+  });
+}
+// Add or change your own mobile number or email. A code is sent to the NEW one first; it is saved only after you type the code.
+function contactChangeForm(channel) {
+  var isPhone = channel === "sms", p = DB.profile;
+  var what = isPhone ? "mobile number" : "email address";
+  openForm({
+    title: (isPhone ? (p.phone ? "Change" : "Add") : "Change") + " " + what,
+    intro: isPhone ? "We will text a 6-digit code to the number to confirm it is yours." : "We will email a 6-digit code to the new address to confirm it is yours. You will sign in with it afterwards.",
+    fields: [{ name: "value", label: isPhone ? "Mobile number" : "New email address", type: isPhone ? "tel" : "email", placeholder: isPhone ? "e.g. 0917 123 4567" : "you@email.com" }],
+    submit: "Send the code",
+    onSubmit: async function (d) {
+      if (!d.value) return { error: isPhone ? "Enter your mobile number." : "Enter the new email address." };
+      var sent = await callFn("admin-contact", { action: "send", channel: channel, value: d.value });
+      contactCodeForm(channel, d.value, sent.sentTo);
+      return { keepOpen: true };
+    }
+  });
+}
+// Second step: type the code that was sent.
+function contactCodeForm(channel, value, sentTo) {
+  var isPhone = channel === "sms";
+  openForm({
+    title: "Enter the code",
+    intro: "We sent a 6-digit code by " + (isPhone ? "text message" : "email") + " to <b>" + esc(sentTo || value) + "</b>. It expires in 10 minutes. If it does not arrive, close this and request a new one after a minute.",
+    fields: [{ name: "code", label: "6-digit code", placeholder: "123456" }],
+    submit: "Verify and save",
+    onSubmit: async function (d) {
+      var r = await callFn("admin-contact", { action: "check", channel: channel, value: value, code: d.code });
+      if (isPhone) { DB.profile.phone = r.phone; DB.profile.contact_verified_at = new Date().toISOString(); }
+      else { DB.profile.email = r.email; try { await sb.auth.refreshSession(); } catch (e) { /* the next sign-in uses the new email */ } }
+      logAct(isPhone ? "Administrator mobile number changed" : "Administrator email changed", "Profile");
+      toast(isPhone ? "Mobile number verified and saved." : "Email changed. Use it the next time you sign in.");
+    }
+  });
+}
 // PAGE: My profile.
 function viewProfile() {
   var p = DB.profile, mine = newest(list("activity")).slice(0, 5);
   return '<div class="profile-grid"><div class="profile-col"><div class="card"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><span class="avatar big">' + esc(initials(adminName())) + "</span><div><h2>" + esc(adminName()) + '</h2><p style="margin:2px 0 8px;color:var(--muted)">Administrator · City Residences Condominium Corporation</p><span class="chip good">Verified admin</span></div></div></div>' +
-    '<div class="card"><h2>Personal information</h2><div class="kv" style="margin-top:10px"><span>Full name</span><b>' + esc(p.name || "—") + "</b><span>Role</span><b>Administrator</b><span>Email</span><b>" + esc(p.email) + "</b><span>Phone</span><b>" + esc(p.phone || "Not added yet") + '</b></div><div style="margin-top:12px"><button class="btn" onclick="changePasswordForm()">Change password</button></div></div>' +
+    '<div class="card"><h2>Personal information</h2><div class="kv" style="margin-top:10px"><span>Full name</span><b>' + esc(p.name || "—") + "</b><span>Role</span><b>Administrator</b><span>Email</span><b>" + esc(p.email) + "</b><span>Phone</span><b>" + esc(p.phone || "Not added yet") + (p.phone && p.contact_verified_at ? ' <span class="chip good" style="margin-left:6px">Verified</span>' : "") + '</b></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="editNameForm()">Edit name</button><button class="btn" onclick="contactChangeForm(\'email\')">Change email</button><button class="btn" onclick="contactChangeForm(\'sms\')">' + (p.phone ? "Change phone" : "Add phone") + '</button><button class="btn" onclick="changePasswordForm()">Change password</button></div></div>' +
     '<div class="card"><div class="card-head" style="display:flex;justify-content:space-between;align-items:center"><h2>Recent activity</h2><button class="btn" onclick="set({view:\'log\'})">Full log</button></div><div class="tl-list">' +
     (mine.map(function (a) { return '<div class="tl-row"><span class="tl-dot"></span><div><b>' + esc(a.v.title) + "</b><small>" + new Date(Number(a.v.at)).toLocaleString() + "</small></div></div>"; }).join("") || '<p class="empty">Nothing yet.</p>') + "</div></div></div>" +
     '<aside class="profile-col"><div class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Quick links</h2><button class="btn" onclick="set({view:\'ann\'})">Announcements</button><button class="btn" onclick="set({view:\'req\'})">Complaints &amp; files</button><button class="btn" onclick="set({view:\'fin\'})">Finance</button><button class="btn" onclick="set({view:\'settings\'})">Settings</button></div></aside></div>';
