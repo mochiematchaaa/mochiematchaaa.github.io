@@ -76,6 +76,7 @@
     draw();
   };
 
+  window.rhTextForm = textForm;
   // After a notice: the mobile numbers and the message, ready to copy into a text message.
   function textForm(withPhone, noPhone, title, body) {
     if (!withPhone.length) return toast("None of these residents has a mobile number on file.");
