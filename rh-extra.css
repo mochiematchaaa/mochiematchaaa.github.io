@@ -264,6 +264,13 @@ button.pk.pick:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0
 .combo-opt:hover,.combo-opt.on{background:var(--hover);color:var(--ink)}
 .combo-none{padding:10px 12px;color:var(--muted);font-size:13px}
 
+/* Admin: Unit rentals. Cards sit in a grid instead of one very wide row each. */
+.rental-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px;margin-top:16px;align-items:start}
+.rental-card .detail-kv{margin-top:2px;grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 18px}
+.rental-card.pending{border:1.5px solid #E8C16A;box-shadow:0 6px 22px rgba(232,193,106,.18)}
+.rental-card .field input{width:100%}
+@media (max-width:520px){.rental-grid{grid-template-columns:1fr}}
+
 /* Admin: import a list from Excel or CSV */
 .imp-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px 16px;background:var(--info-bg);color:var(--info-fg);box-shadow:none}
 .imp-bar-t{flex:1 1 260px;font-size:13.5px}
