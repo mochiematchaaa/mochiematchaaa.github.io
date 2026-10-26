@@ -4,7 +4,7 @@
    and can be reset from the DEMO panel. The sample dates are always built around today.
    Loaded INSTEAD of supabase-js and supabase-config.js. The real system does not use this file. */
 (function () {
-  var KEY = "__rhdemo_v4", SESS = "__rhdemo_session";
+  var KEY = "__rhdemo_v7", SESS = "__rhdemo_session";
   window.RH_SUPABASE = { url: "demo", anonKey: "demo" };
   window.RH_DEMO = true;
 
@@ -55,9 +55,20 @@
     var occ = U.filter(function (u) { return u.status === "Occupied"; });
     var withAcc = occ.slice(0, 24);
     users.push({ id: "demo-admin", email: "admin@demo.test", password: PW, profile: { id: "demo-admin", email: "admin@demo.test", name: "Demo Administrator", role: "admin", unit: null, phone: "0917 000 0000", suspended: false, must_change_password: false, contact_verified_at: verified } });
-    withAcc.forEach(function (u) {
+    withAcc.forEach(function (u, k) {
       var id = "demo-u" + u.i, email = u.key + "@demo.test";
-      users.push({ id: id, email: email, password: PW, profile: { id: id, email: email, name: u.person, role: "resident", unit: u.label, phone: u.contact, suspended: false, must_change_password: false, contact_verified_at: verified } });
+      // sample "new" and "updated" accounts so the Access page has something to show
+      var isNew = k === 5 || k === 11, isUpd = k === 2 || k === 8 || k === 15;
+      var made = new Date(Date.now() - (isNew ? (k === 5 ? 1 : 3) : 20 + k) * 86400000).toISOString();
+      var changed = isUpd ? new Date(Date.now() - (k === 2 ? 1 : k === 8 ? 2 : 4) * 86400000).toISOString() : made;
+      // change history, newest first: { at, field, from, to }. "Account created" has no from/to.
+      var hist = [];
+      if (isUpd) {
+        var fld = k === 2 ? "Mobile number" : k === 8 ? "Email address" : "Unit";
+        hist.push({ at: changed, field: fld, from: k === 2 ? "0917 555 0102" : k === 8 ? u.key.split(".")[0] + "@oldmail.test" : "Unit " + (1 + (k % 9)) + "A", to: k === 2 ? u.contact : k === 8 ? email : u.label });
+      }
+      hist.push({ at: made, field: "Account created", from: "", to: "" });
+      users.push({ id: id, email: email, password: PW, profile: { id: id, email: email, name: u.person, role: "resident", unit: u.label, phone: u.contact, suspended: false, must_change_password: false, contact_verified_at: verified, created_at: made, updated_at: changed, last_change: isUpd ? (k === 2 ? "Mobile number" : k === 8 ? "Email address" : "Unit") : (isNew ? "New account" : ""), history: hist } });
     });
     var byUnit = {};
     U.forEach(function (u) { byUnit[u.label] = { unit: u.label, name: u.house, type: u.type, status: u.status, contact: u.contact, usage: u.type === "Tenant" ? "tenant" : "owner" }; });
@@ -90,9 +101,7 @@
     ] });
     var AM = [
       { id: "pool", name: "Swimming Pool", open: "06:00", close: "20:00", mins: 120, note: "Free for residents. Guests pay ₱150 per visit, collected at the gate." },
-      { id: "hall", name: "Function Hall", open: "08:00", close: "22:00", mins: 120, note: "Good for up to 60 guests. Clean the hall after use." },
-      { id: "gym", name: "Gym", open: "06:00", close: "22:00", mins: 120, note: "Bring a towel and wipe the equipment after use." },
-      { id: "game", name: "Game Room", open: "10:00", close: "22:00", mins: 120, note: "Billiards, table tennis and board games." }
+      { id: "hall", name: "Function Hall", open: "08:00", close: "22:00", mins: 120, note: "Good for up to 60 guests. Clean the hall after use." }
     ];
     R("setting", "amenities", "", { list: AM });
     R("setting", "directory", "", {
@@ -219,7 +228,7 @@
     book("Unit 3B", 0, 2, 6, "Approved"); book("Unit 3B", 1, 0, 3, "Pending"); book("Unit 3B", 0, 4, -6, "Approved");
     var n = 0, guard = 0;
     while (n < 52 && guard++ < 600) {
-      var u = pick(withAcc), off = ri(-12, 14), ai = Math.floor(rnd() * 4), si = Math.floor(rnd() * slotCount(AM[ai])), status;
+      var u = pick(withAcc), off = ri(-12, 14), ai = Math.floor(rnd() * 2), si = Math.floor(rnd() * slotCount(AM[ai])), status;
       var x = rnd();
       status = off < 0 ? (x < 0.85 ? "Approved" : "Denied") : (x < 0.55 ? "Approved" : x < 0.88 ? "Pending" : "Denied");
       if (book(u.label, ai, si, off, status)) n++;
@@ -256,8 +265,8 @@
     var EQX = {
       "E-01": ["", 0, "LiftCare Services", -60], "E-02": ["", 0, "LiftCare Services", 20], "E-03": ["", 0, "AquaFlow Trading", 300], "E-04": ["", 0, "PowerPro Gensets", 200],
       "E-05": ["", 0, "SafeGuard Fire Systems", 400], "E-06": ["", 0, "SafeGuard Fire Systems", null], "E-07": ["Swimming Pool", 1, "AquaFlow Trading", 150],
-      "E-08": ["Gym", 0, "FitGear Supply", -30], "E-09": ["", 0, "CoolAir Services", 90], "E-10": ["", 0, "SecureTech", 10], "E-11": ["Gym", 0, "AquaFlow Trading", -200],
-      "E-12": ["", 0, "SecureTech", 260], "E-13": ["Game Room", 1, "FitGear Supply", null]
+      "E-08": ["", 0, "FitGear Supply", -30], "E-09": ["", 0, "CoolAir Services", 90], "E-10": ["", 0, "SecureTech", 10], "E-11": ["", 0, "AquaFlow Trading", -200],
+      "E-12": ["", 0, "SecureTech", 260], "E-13": ["", 0, "FitGear Supply", null]
     };
     var equipName = {};
     EQUIP.forEach(function (x) {
@@ -349,14 +358,40 @@
       var at = Date.now() - Math.round(x[2] * 86400000) - ri(0, 3600000);
       R("activity", at, "__admin", { title: x[0], area: x[1], at: at });
     });
-    return { seedDay: dk(now), users: users, records: recs, seq: 0 };
+    /* The demo starts EMPTY so the import can be tried on empty lists. Only the settings (rates, payment methods, amenities,
+       directory) and the two sign-in accounts stay: the administrator and the resident Maria Reyes with her own unit.
+       "Load sample data" in the tools panel brings the made-up data back. */
+    var sample = false; try { sample = localStorage.getItem("__rhdemo_mode") === "sample"; } catch (e) { }
+    if (!sample) {
+      users = users.filter(function (u) { return u.id === "demo-admin" || u.email === "resident@demo.test"; });
+      recs = recs.filter(function (r) { return r.kind === "setting" || (r.kind === "unit" && r.id === "Unit 3B"); });
+    }
+    return { seedDay: dk(now), empty: !sample, users: users, records: recs, seq: 0 };
   }
 
   /* ---------------- the in-memory "Supabase" ---------------- */
   function today() { return dk(new Date()); }
   function fresh() { var d = buildSeed(); try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { } return d; }
+  /* What you add (imported files, units, notices...) is kept in this browser and is not wiped when the sample data changes.
+     If an older copy of the data is found, it is carried over and the new fields are filled in. "Clear all data" starts again. */
+  var OLD_KEYS = []; /* older copies held sample data, so they are not carried over: everyone starts empty */
+  function migrate(old) {
+    var s = buildSeed(), byId = {};
+    s.users.forEach(function (u) { byId[u.id] = u.profile; });
+    (old.users || []).forEach(function (u) {
+      var sp = byId[u.id]; if (!sp || !u.profile) return;
+      ["created_at", "updated_at", "last_change", "history"].forEach(function (k) { if (u.profile[k] === undefined && sp[k] !== undefined) u.profile[k] = sp[k]; });
+    });
+    return old;
+  }
   function load() {
-    try { var x = JSON.parse(localStorage.getItem(KEY)); if (x && x.seedDay === today()) return x; } catch (e) { }
+    try { var x = JSON.parse(localStorage.getItem(KEY)); if (x && x.users && x.records) return x; } catch (e) { }
+    for (var i = 0; i < OLD_KEYS.length; i++) {
+      try {
+        var o = JSON.parse(localStorage.getItem(OLD_KEYS[i]));
+        if (o && o.users && o.records) { o = migrate(o); try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { } return o; }
+      } catch (e) { }
+    }
     return fresh();
   }
   var db = load();
@@ -383,6 +418,7 @@
   var PUBLIC = ["announcement", "event", "doc", "poll", "vendor", "slot", "setting", "booking", "rsvp", "vote"];
   function canRead(r) {
     if (role() === "admin") return true;
+    if (r.kind === "announcement" && r.value && r.value.units && r.value.units.length && r.value.units.indexOf(myunit()) < 0) return false; // a notice sent to chosen units only
     if (r.unit === "__admin") return false;
     if (r.unit === "") return true;
     if (PUBLIC.indexOf(r.kind) >= 0) return true;
@@ -440,7 +476,12 @@
             }
             if (q.op === "update") {
               var u = db.users.filter(function (x) { return match(x.profile); })[0];
-              if (u) { Object.assign(u.profile, q.patch); save(); chans.forEach(function (cb) { cb({}); }); }
+              if (u) {
+                var kk = Object.keys(q.patch || {}), shown = { name: "Name", phone: "Mobile number", email: "Email address", unit: "Unit" }, hit = kk.filter(function (x) { return shown[x] && String(q.patch[x]) !== String(u.profile[x]); });
+                var before = {}; hit.forEach(function (x) { before[x] = u.profile[x]; });
+                Object.assign(u.profile, q.patch);
+                if (hit.length) { u.profile.history = (u.profile.history || []); hit.slice().reverse().forEach(function (x) { u.profile.history.unshift({ at: new Date().toISOString(), field: shown[x], from: before[x] == null ? "" : String(before[x]), to: String(q.patch[x]) }); }); u.profile.updated_at = new Date().toISOString(); u.profile.last_change = hit.map(function (x) { return shown[x]; }).join(", "); }
+                save(); chans.forEach(function (cb) { cb({}); }); }
               return resolve({ data: null, error: null });
             }
           }
@@ -522,7 +563,7 @@
               if (b.action === "create") {
                 if (db.users.some(function (u) { return u.email === b.email; })) return bad("An account with that email already exists.");
                 var id = "u" + (++db.seq);
-                db.users.push({ id: id, email: b.email, password: "Temp#Pass1x", profile: { id: id, email: b.email, name: b.name, role: "resident", unit: b.unit, phone: b.phone, suspended: false, must_change_password: true, contact_verified_at: null } });
+                db.users.push({ id: id, email: b.email, password: "Temp#Pass1x", profile: { id: id, email: b.email, name: b.name, role: "resident", unit: b.unit, phone: b.phone, suspended: false, must_change_password: true, contact_verified_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_change: "New account", history: [{ at: new Date().toISOString(), field: "Account created", from: "", to: "" }] } });
                 save(); return ok({ email: b.email, password: "Temp#Pass1x" });
               }
               var t = db.users.filter(function (u) { return u.id === b.userId; })[0];
@@ -554,7 +595,11 @@
 
   /* ---------------- the DEMO panel (bottom-left) ---------------- */
   window.rhDemoReset = function () {
-    try { localStorage.removeItem(KEY); } catch (e) { }
+    try { localStorage.removeItem(KEY); localStorage.removeItem("__rhdemo_mode"); } catch (e) { }
+    location.reload();
+  };
+  window.rhDemoSample = function () {
+    try { localStorage.removeItem(KEY); localStorage.setItem("__rhdemo_mode", "sample"); } catch (e) { }
     location.reload();
   };
   function addPanel() {
@@ -572,10 +617,10 @@
     document.head.appendChild(st);
     var d = document.createElement("div"); d.id = "rhDemo";
     d.innerHTML =
-      '<div class="box"><p><b>Demo mode.</b> Everything here is made-up sample data. There is no database; what you change stays in this browser only.</p>' +
+      '<div class="box"><p><b>Demo mode.</b> It starts empty so you can try the import. There is no database; what you change stays in this browser only.</p>' +
       '<p>Demo logins (password <b>Demo@1234</b>), by email or mobile number:<br>Admin: <b>admin@demo.test</b> or <b>0917 000 0000</b><br>Resident: <b>resident@demo.test</b> or <b>0917 000 1108</b> (Unit 3B)</p>' +
-      '<div class="row"><a class="go" href="' + (admin ? "resident.html?as=resident" : "admin.html?as=admin") + '">Open as ' + (admin ? "Resident" : "Admin") + '</a><button onclick="rhDemoReset()">Reset sample data</button><a href="index.html">Demo home</a></div></div>' +
-      '<button class="pill" onclick="document.getElementById(\'rhDemo\').classList.toggle(\'open\')">DEMO · SAMPLE DATA</button>';
+      '<div class="row"><a class="go" href="' + (admin ? "resident.html?as=resident" : "admin.html?as=admin") + '">Open as ' + (admin ? "Resident" : "Admin") + '</a><button onclick="rhDemoReset()">Clear all data</button><button onclick="rhDemoSample()">Load sample data</button><a href="index.html">Demo home</a></div></div>' +
+      '<button class="pill" onclick="document.getElementById(\'rhDemo\').classList.toggle(\'open\')">DEMO TOOLS</button>';
     document.body.appendChild(d);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addPanel); else addPanel();
