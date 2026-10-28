@@ -4,10 +4,9 @@
 var state = {
   authed: false, view: "home", darkMode: false,
   bellOpen: false, bellSeen: false,
-  unitSearch: "", facIdx: 0,
-  newAnnTitle: "", newAnnBody: "", newAnnType: "General",
+  unitSearch: "", unitPage: 0, facIdx: 0,
   newPollQ: "", newPollOpts: "", pollFilter: "open",
-  finFilter: "unpaid", finQ: "", finPage: 0, payDue: "", payMethod: "", payRef: "", duesDraft: null, motorDraft: null, dailyDraft: null, logPage: 0,
+  finTab: "overview", expPage: 0, finView: "day", finExpDay: "", finMonth: null, finFilter: "unpaid", finQ: "", finPage: 0, pcAll: false, pcPage: 0, pcQ: "", pcFilter: "all", payUnit: "", payDues: [], payDate: "", payMethod: "", payRef: "", duesDraft: null, motorDraft: null, dailyDraft: null, logPage: 0,
   expMonth: "", expDay: "",
   manage: { name: "", email: "", phone: "", unit: "" }, manageSearch: "", manageErr: ""
 };
@@ -63,7 +62,8 @@ function titles() {
     reports: ["Reports", "Collections, occupancy, dues ageing, facility use and requests at a glance."],
     parking: ["Parking", "Motor parking slots, who has one, and requests waiting for approval."],
     log: ["Activity log", "A record of what the administrators did, newest first."],
-    settings: ["Settings", "Billing defaults, the resident directory and your preferences."],
+    history: ["Resident profiles", "The record of every unit and resident: details, household, dues, payments, requests and history. Edit a record and the resident sees it on their dashboard."],
+    settings: ["Settings", "Billing defaults, account and security, access and payments."],
     profile: ["My profile", "Your administrator account, recent activity and shortcuts."]
   }[state.view] || ["", ""];
 }
@@ -71,13 +71,14 @@ function titles() {
 function view() {
   var f = { home: viewHome, units: viewUnits, fac: viewFac, expenses: viewExpenses, fin: viewFin, manage: viewManage, ann: viewAnn,
     rentals: viewRentals, polls: viewPolls, reports: viewReports, parking: viewParking, log: viewLog, settings: viewSettings,
-    profile: viewProfile, req: viewReq }[state.view] || viewHome;
+    profile: viewProfile, req: viewReq, history: viewHistory }[state.view] || viewHome;
   return f();
 }
 
 // Draws the whole admin dashboard (menu + current page). Called after every change.
 function render() {
   if (!state.authed) return;
+  if (state.view === "manage") { state.view = "settings"; state.setTab = "access"; } // Access now lives in Settings
   document.documentElement.setAttribute("data-theme", state.darkMode ? "dark" : "light");
   try { localStorage.setItem("rh_dark", state.darkMode ? "1" : "0"); } catch (e) { /* storage blocked */ }
   var app = document.getElementById("app");
@@ -91,18 +92,18 @@ function render() {
     mountApp(app, '<div class="shell">' +
       '<aside class="side">' +
       '<div class="side-brand"><img src="logo.jpg" alt=""><span>ResidentHub</span></div>' +
-      '<div class="side-label">General</div><nav>' + navBtn("home", "Dashboard") + navBtn("units", "Units") + navBtn("fac", "Facility") + navBtn("ann", "Announcements") + navBtn("polls", "Polls") + "</nav>" +
-      '<div class="side-label">Tools</div><nav>' + navBtn("fin", "Finance") +
-      '<button type="button" title="Expenses" class="' + (state.view === "expenses" ? "active" : "") + '" onclick="set({view:\'expenses\'})">' + icon("fin") + "<span>Expenses</span></button>" +
-      navBtn("reports", "Reports") + navBtn("req", "Complaints") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("rentals", "Unit status") + "</nav>" +
-      '<div class="side-label">Admin</div><nav>' + navBtn("log", "Activity log") + navBtn("manage", "Access") + navBtn("settings", "Settings") + "</nav>" +
-      '<div class="side-foot"><button class="side-user" title="Open my profile" onclick="set({view:\'profile\'})"><span class="avatar">' + esc(initials(adminName())) + "</span><span><b>" + esc(adminName()) + "</b><small>Administrator</small></span></button>" +
-      '<button class="side-out" onclick="doLogout()">' + icon("logout") + "<span>Log out</span></button></div></aside>" +
+      '<div class="side-label">' + tr("General") + '</div><nav>' + navBtn("home", "Dashboard") + navBtn("units", "Units") + navBtn("fac", "Facility") + navBtn("ann", "Announcements") + navBtn("polls", "Polls") + "</nav>" +
+      '<div class="side-label">' + tr("Tools") + '</div><nav>' + navBtn("fin", "Finance") +
+      '<button type="button" title="Expenses" class="' + (state.view === "expenses" ? "active" : "") + '" onclick="set({view:\'expenses\'})">' + icon("fin") + "<span>" + tr("Expenses") + "</span></button>" +
+      navBtn("history", "Resident profiles") + navBtn("reports", "Reports") + navBtn("req", "Complaints") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("rentals", "Unit status") + "</nav>" +
+      '<div class="side-label">' + tr("Admin") + '</div><nav>' + navBtn("log", "Activity log") + navBtn("settings", "Settings") + "</nav>" +
+      '<div class="side-foot"><button class="side-user" title="Open my profile" onclick="set({view:\'profile\'})"><span class="avatar">' + avatarInner(myPhoto(), adminName()) + "</span><span><b>" + esc(adminName()) + "</b><small>Administrator</small></span></button>" +
+      '<button class="side-out" onclick="doLogout()">' + icon("logout") + "<span>" + tr("Log out") + "</span></button></div></aside>" +
       "<main>" +
       '<div class="topline">' + searchBox("Search units, residents, announcements, polls...") +
       '<div class="top-actions"><button class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">' + icon(state.darkMode ? "sun" : "moon") + "</button>" + bellHtml() + "</div></div>" +
       '<div class="body ' + (isHome ? "with-aside" : "") + '"><div class="col">' +
-      '<div class="pagehead"><p class="kicker">' + todayLabel() + "</p><h1>" + titles()[0] + "</h1><p>" + titles()[1] + "</p></div>" +
+      '<div class="pagehead"><p class="kicker">' + todayLabel() + "</p><h1>" + tr(titles()[0]) + "</h1><p>" + tr(titles()[1]) + "</p></div>" +
       view() + "</div>" + (isHome ? homeAside() : "") + "</div></main></div>");
   });
 }
@@ -143,14 +144,35 @@ function homeAside() {
     .map(function (r) { return [esc(r.v.place) + " booking", esc(r.v.who || r.v.unit), esc(r.v.when || "")]; });
   return asideHtml(ev.concat(bk).slice(0, 4), "Add event", "ann");
 }
+// A thin progress bar with a caption ("Occupied · 24 of 36 units").
+function meterHtml(n, total, label, tail) {
+  var pct = total > 0 ? Math.round(n / total * 100) : 0;
+  return '<div class="sc-meter" title="' + pct + '%"><div class="sc-meter-top"><span>' + esc(label) + "</span><b>" + n + esc(tail || "") + '</b></div><div class="sc-meter-bar"><i style="width:' + pct + '%"></i></div></div>';
+}
+// Money collected in each of the last 6 months, as a small bar chart with month names and the amounts.
+function earningsChart() {
+  var now = new Date(), months = [], i;
+  for (i = 5; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: d.getFullYear() * 12 + d.getMonth(), label: d.toLocaleDateString("en-US", { month: "short" }), full: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }), sum: 0, now: i === 0 });
+  }
+  vals("payment").forEach(function (p) {
+    var k = monthOf(p.date);
+    months.forEach(function (m) { if (m.key === k) m.sum += Number(p.amount || 0); });
+  });
+  var max = Math.max.apply(null, months.map(function (m) { return m.sum; }).concat([1])), total = months.reduce(function (t, m) { return t + m.sum; }, 0);
+  var short = function (n) { return n >= 1000000 ? (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(Math.round(n)); };
+  var hOf = function (m) { return m.sum ? Math.max(8, Math.round(m.sum / max * 100)) : 4; };
+  return '<div class="mchart" role="img" aria-label="Money collected per month, last 6 months">' + months.map(function (m) {
+    var h = hOf(m);
+    return '<div class="mc-col' + (m.now ? " now" : "") + (m.sum ? "" : " zero") + '" title="' + escAttr(m.full + ": " + peso(m.sum)) + '"><em style="--h:' + h + '%">' + (m.sum ? "₱" + short(m.sum) : "") + '</em><i style="height:' + h + '%"></i><small>' + m.label + "</small></div>";
+  }).join("") + "</div>" + (total ? "" : '<p class="sc-note">No payments recorded yet. The chart fills in as payments come in.</p>');
+}
 // PAGE: Home / overview.
 function viewHome() {
   var c = counts(), units = list("unit").length;
-  var dues = newest(list("due")).slice(0, 12).reverse();
-  var maxAmt = Math.max.apply(null, dues.map(function (d) { return Number(d.v.amount) || 0; }).concat([1]));
-  var bars = dues.map(function (d) {
-    return '<i class="' + (d.v.paid ? "on" : "") + '" style="height:' + (25 + Math.round((Number(d.v.amount) || 0) / maxAmt * 60)) + '%" title="' + escAttr(d.v.unit) + '"></i>';
-  }).join("");
+  var chart = earningsChart();
+  var allUnits = vals("unit"), occupied = allUnits.filter(function (u) { return u.status !== "Vacant"; }).length;
   var quick = [["Create Announcement", "ann"], ["New Poll", "polls"], ["Add Finance Charge", "fin"], ["View Reports", "reports"], ["Assign Parking", "parking"], ["My Profile", "profile"], ["Settings", "settings"]];
   var pendBk = newest(list("booking")).filter(function (r) { return r.v.status === "Pending"; }).slice(0, 2);
   var openGr = newest(list("grievance")).filter(function (r) { return !(r.v.stage >= 2); }).slice(0, 2);
@@ -162,11 +184,11 @@ function viewHome() {
   var act = newest(list("activity")).slice(0, 4);
   return (!units ? '<div class="card" style="margin-bottom:16px;background:var(--info-bg);color:var(--info-fg)"><b>The system is empty.</b> Nothing is sample data — you decide what goes in. Open <a href="#" onclick="set({view:\'units\'});return false" style="color:inherit;font-weight:700">Units</a> to add each unit (or import a CSV), then create the resident accounts under <a href="#" onclick="set({view:\'manage\'});return false" style="color:inherit;font-weight:700">Access</a>.</div>' : "") +
     '<div class="sc-grid">' +
-    summaryCard("yellow", "Community", [[units, "Units", "units"], [residentCount(), "Residents", "manage"], [list("doc").length, "Documents", "req"]], "cross") +
-    summaryCard("pink", "Finance", [[peso(monthEarnings()), "Earnings this month", "fin"], [c.unpaid, "Unpaid dues", "fin"]], "heart", bars ? '<div class="bars" title="One bar per recent charge. Solid bars are paid.">' + bars + "</div>" : "") +
-    summaryCard("green", "Needs attention", [[c.grievances, "Complaints", "req"], [c.bookings, "Bookings", "fac"], [c.rentals, "Unit status to review", "rentals"]], "triangle") +
-    summaryCard("blue", "Community life", [[openPolls, "Open polls", "polls"], [used + "/" + slots.length, "Parking used", "parking"]], "burst") +
-    "</div>" +
+    summaryCard("yellow", "Community", [[units, "Units", "units"], [residentCount(), "Residents", "manage"], [list("doc").length, "Documents", "req"]], "cross", meterHtml(occupied, units, "Occupied", " of " + units + " units")) +
+    summaryCard("pink", "Finance", [[peso(monthEarnings()), "Earnings this month", "fin"], [c.unpaid, "Unpaid dues", "fin"]], "heart", chart) +
+    summaryCard("green", "Needs attention", [[c.grievances, "Complaints", "req"], [c.bookings, "Bookings", "fac"], [c.rentals, "Unit status to review", "rentals"]], "triangle", '<p class="sc-note">' + ((c.grievances + c.bookings + c.rentals) ? (c.grievances + c.bookings + c.rentals) + " things are waiting for a decision" : "Nothing is waiting") + "</p>") +
+    summaryCard("blue", "Community life", [[openPolls, "Open polls", "polls"], [used + "/" + slots.length, "Parking used", "parking"]], "burst", meterHtml(used, slots.length, "Parking", " of " + slots.length + " slots in use")) +
+    "<!--sc-end--></div>" + (typeof payCheckPanel === "function" ? payCheckPanel(4) : "") +
     '<div class="pills-row">' + quick.map(function (q) { return '<button onclick="set({view:\'' + q[1] + '\'})">' + q[0] + "</button>"; }).join("") + "</div>" +
     '<div class="two-lists"><section><div class="sec-head"><h2>Pending requests</h2><button class="btn-dark sm" onclick="set({view:\'fac\'})">Open requests</button></div>' +
     '<div class="lrows">' + (rows.join("") || '<p class="empty">Nothing is waiting for you. Nice work.</p>') + "</div></section>" +
@@ -196,32 +218,36 @@ function matchesSearch(content, query) {
   return norm(query).trim().split(/\s+/).filter(Boolean).every(function (w) { return text.indexOf(w) >= 0; });
 }
 // PAGE: Units (list, add, import, export).
+var UNIT_PAGE = 10;
+// Goes to another page of the units list.
+function goUnitPage(n) { state.unitPage = Math.max(0, n); render(); }
 function viewUnits() {
   var rows = sortedUnits().filter(function (r) {
     var u = r.v, bal = balanceFor(r.id);
     return matchesSearch([r.id, u.name, u.type, u.status, u.contact, usageLabel(u.usage), bal > 0 ? "overdue unpaid dues" : "settled paid dues"].join(" "), state.unitSearch);
   });
-  var html = rows.map(function (r) {
+  var unitPages = Math.max(1, Math.ceil(rows.length / UNIT_PAGE)), unitPage = Math.min(Math.max(0, state.unitPage || 0), unitPages - 1);
+  var html = rows.slice(unitPage * UNIT_PAGE, (unitPage + 1) * UNIT_PAGE).map(function (r) {
     var u = r.v, bal = balanceFor(r.id);
-    return '<tr><td style="font-weight:700">' + esc(r.id) + "</td><td>" + esc(u.name || "—") + '</td><td style="color:var(--muted)">' + esc(u.type || "Owner") + '</td><td><span class="chip ' + (u.status === "Vacant" ? "warn" : "good") + '">' + esc(u.status || "Occupied") + '</span></td><td style="color:var(--muted)">' + esc(u.contact || "—") + "</td><td>" + usageCellHtml(u) +
-      "</td><td>" + (bal ? peso(bal) : '<span style="color:var(--muted)">—</span>') + '</td><td><button class="btn" style="min-height:34px;padding:0 14px;font-size:12.5px" onclick="showUnit(\'' + escAttr(r.id) + '\')">View</button></td></tr>';
+    return '<tr><td style="font-weight:700">' + esc(r.id) + "</td><td>" + esc(u.name || "—") + '</td><td style="color:var(--muted)">' + esc(u.type || "Owner") + '</td><td><span class="chip ' + (u.status === "Vacant" ? "warn" : "good") + '">' + esc(u.status || "Occupied") + '</span></td><td style="color:var(--muted)">' + (Number(u.area) > 0 ? esc(String(u.area)) + " sqm" : "—") + '</td><td style="color:var(--muted)">' + esc(u.contact || "—") + "</td><td>" + usageCellHtml(u) +
+      "</td><td>" + (bal ? peso(bal) : '<span style="color:var(--muted)">—</span>') + '</td><td><button class="btn" style="min-height:34px;padding:0 14px;font-size:12.5px" onclick="showUnit(\'' + escAttr(r.id) + '\')">View</button> <button class="btn" style="min-height:34px;padding:0 14px;font-size:12.5px" onclick="openHistory(\'' + escAttr(r.id) + '\')">History</button></td></tr>';
   });
   return '<div class="unit-search-panel"><label for="unitSearchInput">Search units &amp; residents</label>' +
-    '<input type="search" id="unitSearchInput" value="' + escAttr(state.unitSearch) + '" oninput="set({unitSearch:this.value})" placeholder="Search unit, resident, contact, status, usage or dues..." autocomplete="off">' +
+    '<input type="search" id="unitSearchInput" value="' + escAttr(state.unitSearch) + '" oninput="set({unitSearch:this.value,unitPage:0})" placeholder="Search unit, resident, contact, status, usage or dues..." autocomplete="off">' +
     '<p>Search any record information. Combine words, such as “Reyes owner” or “vacant overdue”.</p></div>' +
     '<div class="filters unit-actions"><span role="status" style="margin-right:auto;font-size:13px;color:var(--muted)">' + rows.length + " matching " + (rows.length === 1 ? "unit" : "units") + "</span>" +
     '<button class="btn primary" onclick="unitForm(null)">+ Add unit</button>' +
     '<button class="btn" onclick="exportUnits()">Export CSV</button></div>' +
-    '<div class="card" style="padding:0;overflow:hidden">' + tableRows(html, ["UNIT", "RESIDENT / OWNER", "OCCUPANCY", "STATUS", "CONTACT", "USAGE", "BALANCE", ""], list("unit").length ? "No units match your search." : "No units yet. Tap “Add unit” or import a CSV.") + "</div>";
+    '<div class="card" style="padding:0;overflow:hidden">' + tableRows(html, ["UNIT", "RESIDENT / OWNER", "OCCUPANCY", "STATUS", "AREA", "CONTACT", "USAGE", "BALANCE", ""], list("unit").length ? "No units match your search." : "No units yet. Tap “Add unit” or import a CSV.") + (rows.length > UNIT_PAGE ? pagerHtml(rows.length, unitPage, UNIT_PAGE, "goUnitPage") : "") + "</div>";
 }
 // Downloads the units as a CSV file.
 function exportUnits() {
-  exportCSV("units.csv", ["Unit", "Resident/Owner", "Occupancy", "Status", "Contact", "Usage", "Usage details"], sortedUnits().map(function (r) {
-    return [r.id, r.v.name || "", r.v.type || "", r.v.status || "", r.v.contact || "", usageLabel(r.v.usage), r.v.statusNote || ""];
+  exportCSV("units.csv", ["Unit", "Resident/Owner", "Occupancy", "Status", "Floor area (sqm)", "Contact", "Usage", "Usage details"], sortedUnits().map(function (r) {
+    return [r.id, r.v.name || "", r.v.type || "", r.v.status || "", r.v.area || "", r.v.contact || "", usageLabel(r.v.usage), r.v.statusNote || ""];
   }));
 }
 // Downloads an empty CSV template for importing units.
-function unitsTemplate() { exportCSV("units-template.csv", ["Unit", "Household", "Occupancy", "Status", "Contact"], []); }
+function unitsTemplate() { exportCSV("units-template.csv", ["Unit", "Household", "Occupancy", "Status", "Floor area (sqm)", "Contact"], []); }
 // Makes a unit name tidy: 'unit  101' -> 'Unit 101'.
 function cleanUnitLabel(s) {
   var t = String(s || "").replace(/[^A-Za-z0-9 \-]/g, "").replace(/\s+/g, " ").trim();
@@ -241,6 +267,8 @@ function unitForm(edit) {
       { name: "name", label: "Household / owner name", value: u.name && u.name !== "—" ? u.name : "" },
       { name: "type", label: "Occupancy", type: "select", options: ["Owner", "Tenant"], value: u.type || "Owner" },
       { name: "status", label: "Status", type: "select", options: ["Occupied", "Vacant"], value: u.status || "Occupied" },
+      { name: "area", label: "Floor area (sqm)", type: "number", step: "0.01", value: u.area || "", placeholder: "e.g. 45" },
+      { name: "dueDay", label: "Dues are due on day (1 to 31)", type: "number", step: "1", value: u.dueDay || "", placeholder: "e.g. 15 (each unit can have its own day)" },
       { name: "contact", label: "Contact number", value: u.contact && u.contact !== "—" ? u.contact : "" }
     ],
     onSubmit: async function (d) {
@@ -251,7 +279,11 @@ function unitForm(edit) {
         if (unitExists(label)) return { error: label + " already exists." };
       }
       var old = edit ? unitRec(edit) || {} : {};
-      await put("unit", label, label, Object.assign({}, old, { unit: label, name: d.name || "—", type: d.type, status: d.status, contact: d.contact || "—", usage: old.usage || "owner" }));
+      var area = d.area === "" || d.area == null ? "" : parseFloat(d.area);
+      if (area !== "" && !(area > 0)) return { error: "Enter the floor area in square meters, e.g. 45." };
+      var dueDay = d.dueDay === "" || d.dueDay == null ? "" : parseInt(d.dueDay, 10);
+      if (dueDay !== "" && !(dueDay >= 1 && dueDay <= 31)) return { error: "The due day is a day of the month from 1 to 31." };
+      await put("unit", label, label, Object.assign({}, old, { unit: label, name: d.name || "—", type: d.type, status: d.status, area: area, dueDay: dueDay, contact: d.contact || "—", usage: old.usage || "owner" }));
       logAct((edit ? "Unit updated: " : "Unit added: ") + label, "Units");
     }
   });
@@ -273,8 +305,9 @@ function showUnit(unit) {
     '<div class="kv"><span>Occupancy</span><b>' + esc(u.type || "Owner") + "</b><span>Status</span><b>" + esc(u.status || "Occupied") + "</b><span>Contact</span><b>" + esc(u.contact || "—") +
     "</b><span>Usage</span><b>" + esc(usageLabel(u.usage)) + (needsApproval(u) ? " (" + esc(u.usageStatus || "pending") + ")" : "") + "</b>" +
     (usageInfoRows(u).length ? usageInfoRows(u).map(function (x) { return "<span>" + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b>"; }).join("") : (u.statusNote ? "<span>Note</span><b>" + esc(u.statusNote) + "</b>" : "")) +
+    "<span>Floor area</span><b>" + (Number(u.area) > 0 ? esc(String(u.area)) + " sqm" : "Not set") + "</b><span>Monthly dues</span><b>" + (unitDues(unit).area && unitDues(unit).rate ? peso(unitDues(unit).monthly) + " (" + unitDues(unit).area + " sqm × " + peso(unitDues(unit).rate) + ")" : "Set the area and the rate") + "</b>" +
     "<span>Dues</span><b>" + (bal ? peso(bal) + " unpaid" : "Settled") + "</b><span>Account</span><b>" + (acc ? esc(acc.email) : "None yet") + "</b></div>" +
-    '<div class="modal-actions"><button class="btn primary" onclick="closeModal();unitForm(\'' + escAttr(unit) + '\')">Edit</button>' +
+    '<div class="modal-actions"><button class="btn primary" onclick="closeModal();unitForm(\'' + escAttr(unit) + '\')">Edit</button><button class="btn" onclick="openHistory(\'' + escAttr(unit) + '\')">Full history</button>' +
     (acc ? "" : '<button class="btn" onclick="closeModal();set({view:\'manage\',manage:Object.assign(state.manage,{unit:\'' + escAttr(unit) + '\'})})">Create account</button>') +
     '<button class="btn" onclick="closeModal();setUsageForm(\'' + escAttr(unit) + '\')">Change usage</button>' +
     '<button class="btn" style="color:#A02B1D" onclick="removeUnit(\'' + escAttr(unit) + '\')">Remove</button></div>');
@@ -305,7 +338,7 @@ function importUnits(input) {
       if (rows.length < 2) throw new Error("The file has no rows. Use the template.");
       var head = rows[0].map(function (h) { return h.trim().toLowerCase(); });
       var col = function (names) { for (var i = 0; i < head.length; i++) if (names.indexOf(head[i]) >= 0) return i; return -1; };
-      var ci = { unit: col(["unit", "unit name"]), name: col(["household", "name", "owner", "resident", "resident/owner"]), type: col(["occupancy", "type"]), status: col(["status"]), contact: col(["contact", "contact number", "phone"]) };
+      var ci = { unit: col(["unit", "unit name"]), name: col(["household", "name", "owner", "resident", "resident/owner"]), type: col(["occupancy", "type"]), status: col(["status"]), contact: col(["contact", "contact number", "phone"]), area: col(["floor area (sqm)", "floor area", "area", "sqm", "area (sqm)"]) };
       if (ci.unit < 0) throw new Error("The file needs a “Unit” column. Use the template.");
       var added = 0, skipped = 0;
       for (var i = 1; i < rows.length; i++) {
@@ -314,7 +347,8 @@ function importUnits(input) {
         var get = function (k) { return ci[k] >= 0 ? String(r[ci[k]] || "").trim() : ""; };
         var type = /tenant/i.test(get("type")) ? "Tenant" : "Owner";
         var status = /vacant/i.test(get("status")) ? "Vacant" : "Occupied";
-        await put("unit", label, label, { unit: label, name: get("name") || "—", type: type, status: status, contact: get("contact") || "—", usage: type === "Tenant" ? "tenant" : "owner" });
+        var ar = parseFloat(get("area"));
+        await put("unit", label, label, { unit: label, name: get("name") || "—", type: type, status: status, area: ar > 0 ? ar : "", contact: get("contact") || "—", usage: type === "Tenant" ? "tenant" : "owner" });
         added++;
       }
       logAct("Units imported: " + added, "Units");
@@ -331,34 +365,6 @@ function importUnits(input) {
 function bookingAt(f, i) {
   var today = dayKey(new Date()), place = (facilities()[f] || {}).name;
   return vals("booking").filter(function (x) { return x.day === today && Number(x.slot) === i && x.place === place && (x.status === "Pending" || x.status === "Approved"); })[0];
-}
-// PAGE: Facility (booking requests and time slots).
-function viewFac() {
-  var bookings = newest(list("booking"));
-  var order = { Pending: 0, Approved: 1, Denied: 2 };
-  bookings.sort(function (a, b) { return (order[a.v.status] != null ? order[a.v.status] : 3) - (order[b.v.status] != null ? order[b.v.status] : 3) || Number(b.id) - Number(a.id); });
-  var rows = bookings.map(function (r) {
-    var b = r.v;
-    return '<tr><td style="font-weight:700">' + esc(b.place) + "</td><td>" + esc(b.unit) + (b.who && b.who !== b.unit ? ' <span style="color:var(--muted)">· ' + esc(b.who) + "</span>" : "") + '</td><td style="color:var(--muted)">' + esc(b.when) + '</td><td><span class="chip ' + (b.status === "Approved" ? "good" : b.status === "Denied" ? "bad" : "warn") + '">' + esc(b.status) + '</span></td><td style="display:flex;gap:6px">' +
-      (b.status === "Pending" ? '<button class="btn primary" onclick="setBooking(\'' + escAttr(r.id) + '\',\'Approved\')">Approve</button><button class="btn" onclick="setBooking(\'' + escAttr(r.id) + '\',\'Denied\')">Deny</button>' : "") + "</td></tr>";
-  });
-  var fl = facilities();
-  var manage = '<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="font-size:19px;flex-grow:1">Amenities</h2><button class="btn primary" onclick="amenityForm()">+ Add amenity</button></div>' +
-    '<p class="hint">Add a new amenity, change its name, opening hours or how long one booking is. Residents see the change straight away.</p>' +
-    (fl.length ? '<div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">' + fl.map(function (f) {
-      return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border2);padding-top:10px"><div style="flex-grow:1;min-width:200px"><b>' + esc(f.name) + '</b><div style="font-size:13px;color:var(--muted)">' + esc(f.hours || "Set the hours") + " · " + f.slots.length + " time slot" + (f.slots.length === 1 ? "" : "s") + " of " + (Number(f.mins) || 120) + ' min</div></div>' +
-        '<button class="btn" onclick="amenityForm(\'' + escAttr(f.id) + '\')">Edit</button><button class="btn" style="color:#A02B1D" onclick="removeAmenity(\'' + escAttr(f.id) + '\')">Remove</button></div>';
-    }).join("") + "</div>" : '<p class="empty">No amenities yet. Add the first one.</p>') + "</div>";
-  return manage + '<div class="facility-today-grid">' + fl.map(function (f, fi) {
-    return '<div class="card"><h2>' + esc(f.name) + ' · Availability today</h2><p class="hint">' + esc(f.hours) + " · Select an open slot to close it, or a closed slot to open it</p>" +
-      (f.note ? '<p class="hint">' + esc(f.note) + "</p>" : "") + '<div class="slots">' + f.slots.map(function (t, i) {
-        var closed = slotClosed(fi, i), bk = bookingAt(fi, i);
-        var cls = closed || bk ? "booked" : "open", label = closed ? "Closed" : bk ? "Booked" : "Open";
-        return '<button class="slot ' + cls + '" title="' + escAttr(bk ? bk.unit : "") + '" onclick="toggleSlot(' + fi + "," + i + ')"><b>' + esc(t) + "</b><span>" + label + "</span></button>";
-      }).join("") + "</div></div>";
-  }).join("") + "</div>" +
-    '<div class="card" style="padding:0;overflow:hidden;margin-top:16px"><div style="display:flex;align-items:center;padding:14px 18px"><h2 style="font-size:19px;flex-grow:1">Reservation requests</h2><button class="btn" onclick="exportBookings()">Export to Excel (.csv)</button></div>' +
-    tableRows(rows, ["FACILITY", "UNIT", "WHEN", "STATUS", ""], "No reservation requests yet.") + "</div>";
 }
 // Blocks or opens one time slot of a facility.
 function toggleSlot(f, i) {
@@ -430,44 +436,6 @@ function exportBookings() {
 /* ==========================================================================
    Announcements and events
    ========================================================================== */
-function viewAnn() {
-  var anns = newest(list("announcement")), evs = newest(list("event"));
-  return '<div class="two-col-r" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)"><div style="display:flex;flex-direction:column;gap:16px">' +
-    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h2 style="font-size:19px">Create announcement</h2>' +
-    '<input id="annTitle" placeholder="Title" value="' + escAttr(state.newAnnTitle) + '" oninput="state.newAnnTitle=this.value" ' + inputStyle() + ">" +
-    '<textarea id="annBody" placeholder="Message" oninput="state.newAnnBody=this.value" style="min-height:70px;border:1px solid #CFC3A9;border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical">' + esc(state.newAnnBody) + "</textarea>" +
-    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="field" style="flex-grow:0"><label style="font-size:12px;font-weight:700;color:var(--muted)">Type</label>' +
-    '<select onchange="state.newAnnType=this.value" style="height:40px;border:1px solid #CFC3A9;border-radius:10px;padding:0 10px;font-size:14px">' +
-    ["General", "Maintenance", "Warning", "Emergency"].map(function (t) { return "<option " + (state.newAnnType === t ? "selected" : "") + ">" + t + "</option>"; }).join("") + "</select></div></div>" +
-    '<button class="btn primary" onclick="addAnnouncement()">Publish announcement</button></div>' +
-    '<div class="card" style="padding:0;overflow:hidden"><div style="display:flex;align-items:center;padding:14px 18px"><h2 style="font-size:19px;flex-grow:1">Announcements</h2><button class="btn" onclick="exportAnnouncements()">Export to Excel (.csv)</button></div>' +
-    (anns.map(function (r) {
-      var a = r.v, status = a.status || "Published", type = a.type || "General";
-      return '<div style="padding:12px 18px;border-top:1px solid var(--border2)"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><div style="font-weight:700;font-size:15px">' + esc(a.title) + '</div><span style="display:flex;gap:6px;flex-shrink:0">' +
-        (type !== "General" ? '<span class="chip ' + typeChipClass(type) + '">' + esc(type) + "</span>" : "") + '<span class="chip ' + (status === "Published" ? "good" : "warn") + '">' + esc(status) + "</span></span></div>" +
-        '<div style="font-size:13px;color:var(--muted);margin:4px 0">' + esc(a.body) + '</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--muted)">' + esc(a.date) + '</span><span style="display:flex;gap:6px">' +
-        (status !== "Published" ? '<button class="btn" onclick="publishAnn(\'' + escAttr(r.id) + '\')">Publish</button>' : "") +
-        '<button class="btn" style="font-size:12px" onclick="editAnn(\'' + escAttr(r.id) + '\')">Edit</button><button class="btn" style="font-size:12px;color:#A02B1D" onclick="deleteAnn(\'' + escAttr(r.id) + '\')">Delete</button></span></div></div>';
-    }).join("") || '<div style="padding:18px;border-top:1px solid var(--border2);color:var(--muted)">No announcements yet.</div>') + "</div></div>" +
-    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h2 style="font-size:19px">Add event</h2><button class="btn primary" onclick="eventForm(null)">+ Add event</button>' +
-    '<div style="border-top:1px solid var(--border2);margin-top:6px;padding-top:10px;display:flex;justify-content:space-between;align-items:baseline"><h2 style="font-size:16px">Upcoming events</h2><button class="btn" onclick="exportEvents()" style="font-size:12px;min-height:34px">Export .csv</button></div>' +
-    (evs.map(function (r) {
-      var e = r.v, going = list("rsvp").filter(function (x) { return Number(x.v.event) === Number(r.id); }).length;
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border2)"><div><div style="font-weight:700;font-size:14px">' + esc(e.title) + '</div><div style="font-size:12px;color:var(--muted)">' + esc(e.date) + " · " + esc(e.place) + " · " + going + ' going</div></div><span style="display:flex;gap:6px"><button class="btn" style="min-height:32px;padding:0 10px;font-size:12px" onclick="eventForm(\'' + escAttr(r.id) + '\')">Edit</button><button class="btn" style="min-height:32px;padding:0 10px;font-size:12px;color:#A02B1D" onclick="deleteEvent(\'' + escAttr(r.id) + '\')">Delete</button></span></div>';
-    }).join("") || '<p class="empty">No events yet.</p>') + "</div></div>";
-}
-// Saves a new announcement draft from the form.
-function addAnnouncement() {
-  var title = state.newAnnTitle.trim();
-  if (!title) return toast("Enter a title first.");
-  act(async function () {
-    var id = nextId();
-    await put("announcement", id, "", { id: id, title: title, body: state.newAnnBody.trim() || "—", date: shortDate(new Date()), status: "Published", type: state.newAnnType || "General" });
-    logAct("Announcement published: " + title, "Announcements");
-    state.newAnnTitle = ""; state.newAnnBody = ""; state.newAnnType = "General";
-    toast("Announcement published. Residents can see it now.");
-  });
-}
 // Publishes an announcement so residents can see it.
 function publishAnn(id) {
   var row = getRow("announcement", id); if (!row) return;
@@ -476,24 +444,9 @@ function publishAnn(id) {
     logAct("Announcement published: " + row.value.title, "Announcements");
   });
 }
-// Popup form to edit an announcement.
-function editAnn(id) {
-  var row = getRow("announcement", id); if (!row) return;
-  var a = row.value;
-  openForm({
-    title: "Edit announcement",
-    fields: [{ name: "title", label: "Title", value: a.title }, { name: "body", label: "Message", type: "textarea", value: a.body === "—" ? "" : a.body },
-      { name: "type", label: "Type", type: "select", options: ["General", "Maintenance", "Warning", "Emergency"], value: a.type || "General" }],
-    onSubmit: async function (d) {
-      if (!d.title) return { error: "Enter a title." };
-      await put("announcement", id, "", Object.assign({}, a, { title: d.title, body: d.body || "—", type: d.type }));
-      logAct("Announcement edited: " + d.title, "Announcements");
-    }
-  });
-}
 // Deletes an announcement.
 function deleteAnn(id) {
-  confirmBox("Delete announcement?", "Residents will no longer see it.", "Delete", async function () { await del("announcement", id); logAct("Announcement deleted", "Announcements"); }, true);
+  confirmBox("Delete announcement?", "Residents will no longer see it.", "Delete", async function () { await del("announcement", id); if (String(state.annOpen) === String(id)) state.annOpen = ""; logAct("Announcement deleted", "Announcements"); }, true);
 }
 // Popup form to add or edit an event.
 function eventForm(id) {
@@ -526,58 +479,3 @@ function exportAnnouncements() {
 // Downloads events as CSV.
 function exportEvents() { exportCSV("events.csv", ["Title", "Date", "Venue"], newest(list("event")).map(function (r) { return [r.v.title, r.v.date, r.v.place]; })); }
 
-/* ==========================================================================
-   Polls
-   ========================================================================== */
-function viewPolls() {
-  var all = pollsAll(), open = all.filter(function (p) { return p.open; }).length, units = list("unit").length;
-  var shown = all.filter(function (p) { return state.pollFilter === "all" || (state.pollFilter === "open") === p.open; });
-  return '<div class="two-col-r" style="grid-template-columns:minmax(0,1fr) 360px"><div style="display:flex;flex-direction:column;gap:14px">' +
-    pageTabs([["open", "Open (" + open + ")"], ["closed", "Closed (" + (all.length - open) + ")"], ["all", "All (" + all.length + ")"]], state.pollFilter, "pollFilter") +
-    (shown.map(function (p) {
-      var voted = list("vote").filter(function (x) { return Number(x.v.poll) === p.id; }).length;
-      return '<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px"><div><h2>' + esc(p.q) + '</h2><small style="color:var(--muted)">' + (p.open ? "Closes" : "Closed") + " " + esc(p.closes) + '</small></div><span class="chip ' + (p.open ? "good" : "info") + '">' + (p.open ? "Open" : "Closed") + "</span></div>" +
-        pollBars(p) + (units ? '<div style="margin-top:14px">' + progressBar("Units that voted", voted, units, "green") + "</div>" : "") +
-        '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn" onclick="togglePoll(' + p.id + ')">' + (p.open ? "Close poll" : "Reopen poll") + '</button><button class="btn" onclick="exportPoll(' + p.id + ')">Export results</button><button class="btn" style="margin-left:auto;color:var(--bad-fg)" onclick="deletePoll(' + p.id + ')">Delete</button></div></div>';
-    }).join("") || '<p class="empty">No polls here yet.</p>') + "</div>" +
-    '<div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>New poll</h2><p style="margin:0;font-size:13px;color:var(--muted)">Residents see open polls in their portal and vote once per unit.</p>' +
-    '<label class="fl">Question<input id="newPollQ" value="' + escAttr(state.newPollQ) + '" oninput="state.newPollQ=this.value" placeholder="e.g. Extend pool hours on weekends?"></label>' +
-    '<label class="fl">Options (one per line)<textarea id="newPollOpts" rows="4" oninput="state.newPollOpts=this.value" placeholder="Yes&#10;No&#10;Not sure">' + esc(state.newPollOpts) + '</textarea></label>' +
-    '<button class="btn primary" onclick="addPoll()">Publish poll</button></div></div>';
-}
-// Creates a new poll from the form.
-function addPoll() {
-  var options = state.newPollOpts.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
-  if (!state.newPollQ.trim() || options.length < 2) return toast("Add a question and at least two options.");
-  act(async function () {
-    var id = nextId(), end = shortDate(new Date(Date.now() + 7 * 86400000));
-    await put("poll", id, "", { id: id, question: state.newPollQ.trim(), open: true, closes: end, options: options });
-    logAct("Poll published: " + state.newPollQ.trim(), "Polls");
-    state.newPollQ = ""; state.newPollOpts = ""; state.pollFilter = "open";
-    toast("Poll published. Residents can vote now.");
-  });
-}
-// Opens or closes voting on a poll.
-function togglePoll(id) {
-  var row = getRow("poll", id); if (!row) return;
-  act(async function () {
-    var open = !row.value.open;
-    await put("poll", id, "", Object.assign({}, row.value, { open: open }));
-    logAct((open ? "Poll reopened: " : "Poll closed: ") + row.value.question, "Polls");
-  });
-}
-// Deletes a poll.
-function deletePoll(id) {
-  var row = getRow("poll", id); if (!row) return;
-  confirmBox("Delete this poll?", "The poll and its results will be removed.", "Delete", async function () {
-    await del("poll", id);
-    var gone = list("vote").filter(function (r) { return Number(r.v.poll) === Number(id); });
-    for (var i = 0; i < gone.length; i++) await del("vote", gone[i].id);
-    logAct("Poll deleted: " + row.value.question, "Polls");
-  }, true);
-}
-// Downloads one poll's results as CSV.
-function exportPoll(id) {
-  var p = pollsAll().filter(function (x) { return x.id === Number(id); })[0]; if (!p) return;
-  exportCSV("poll-results.csv", ["Option", "Votes"], p.options.map(function (o) { return [o.t, o.votes]; }));
-}

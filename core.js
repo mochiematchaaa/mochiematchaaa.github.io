@@ -318,6 +318,18 @@ function balanceFor(unit) {
   return vals("due").filter(function (d) { return d.unit === unit && !d.paid; })
     .reduce(function (s, d) { return s + Number(d.amount || 0); }, 0);
 }
+// What a unit pays each month (floor area x the rate per sqm), and what it has been billed and has paid so far. All of it is computed from the records.
+function unitDues(unit) {
+  var u = unitRec(unit) || {}, area = Number(u.area) || 0, rate = Number(setting("dues_rate_sqm").rate) || 0, billed = 0, paid = 0;
+  vals("due").forEach(function (d) { if (d.unit !== unit) return; var a = Number(d.amount || 0); billed += a; if (d.paid) paid += a; });
+  return { area: area, rate: rate, monthly: Math.round(area * rate * 100) / 100, billed: billed, paid: paid, balance: billed - paid };
+}
+// The day a charge was billed (uploaded). Older charges without it use the time in their id.
+function billedOn(id, d) {
+  if (d && d.billedOn) return d.billedOn;
+  var n = Number(id);
+  return n > 1e12 ? shortDate(new Date(n)) : "";
+}
 // True if a due is unpaid and its due date has passed.
 function isOverdue(d) {
   if (d.paid || !d.dueDate) return false;
@@ -353,13 +365,29 @@ function slotKey(f, i) { var a = facilities()[f]; return (a ? a.id : f) + "-" + 
 /* Motor parking: a resident picks a free slot, pays, and the office confirms the payment.
    The request row holds the chosen slot ("slot") and the rental ("amount"). */
 var PARK_FOR = "Motor parking rental";
-/* the two ways to rent a slot: for one month, or by the day */
-function motorRates() { return { month: setting("motor_rate").rate || 0, day: setting("motor_rate_daily").rate || 0 }; }
+/* Motor parking is priced by the size of the slot. Each size has its own monthly and daily rate.
+   Rates live in the "park_sizes" setting; until the office sets them they come from the old single rates. */
+var PARK_SIZE_DEFAULT = [["Small", 2, 0.7], ["Regular", 3, 1], ["Large", 4.5, 1.5]];
+function parkSizes() {
+  var saved = setting("park_sizes").list;
+  if (saved && saved.length) return saved.map(function (x) { return { name: String(x.name), sqm: Number(x.sqm) || 0, month: Number(x.month) || 0, day: Number(x.day) || 0 }; });
+  var m = Number(setting("motor_rate").rate) || 0, d = Number(setting("motor_rate_daily").rate) || 0;
+  return PARK_SIZE_DEFAULT.map(function (z) { return { name: z[0], sqm: z[1], month: Math.round(m * z[2] / 10) * 10, day: Math.round(d * z[2]) }; });
+}
+// The size of a slot ('Regular' when the office never set one).
+function slotSize(id) { var r = getRow("slot", id); return (r && r.value.size) || "Regular"; }
+// Monthly and daily rate for a size name.
+function parkRatesFor(size) {
+  var all = parkSizes(), f = all.filter(function (z) { return z.name === size; })[0] || all.filter(function (z) { return z.name === "Regular"; })[0] || all[0];
+  return { month: f.month, day: f.day, sqm: f.sqm, name: f.name };
+}
+/* the old name: the rates of a Regular slot */
+function motorRates() { return parkRatesFor("Regular"); }
 // Text for a parking plan: 'Monthly' or 'Daily - 3 days'.
 function parkPlanText(plan, days) { return plan === "day" ? "Daily" + (days ? " · " + days + " day" + (days === 1 ? "" : "s") : "") : "Monthly"; }
 // Computes the parking price from the plan and number of days.
-function parkQuote(plan, days) {
-  var r = motorRates();
+function parkQuote(plan, days, size) {
+  var r = parkRatesFor(size || "Regular");
   if (plan === "day") { var d = Math.max(1, Math.min(365, Math.round(Number(days)) || 1)); return { plan: "day", days: d, amount: r.day * d }; }
   return { plan: "month", days: 0, amount: r.month };
 }
@@ -376,7 +404,7 @@ function parkUntil(plan, days, from) {
 /* what the office writes on a slot when it gives it to a unit */
 function parkSlotValue(id, unit, plan, days, amount) {
   var from = dayKey(new Date());
-  return { id: id, unit: unit, plan: plan || "month", from: from, until: parkUntil(plan || "month", days, from), amount: amount || 0 };
+  return { id: id, unit: unit, plan: plan || "month", from: from, until: parkUntil(plan || "month", days, from), amount: amount || 0, size: slotSize(id) };
 }
 // True if a parking rental already ended.
 function parkExpired(v) { return !!(v && v.unit && v.until && v.until < dayKey(new Date())); }
@@ -418,6 +446,38 @@ var BOOK_AHEAD_DAYS = 90;
 function keyToDate(k) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
 // Start time (minutes after midnight) of a time slot.
 function slotStartMin(a, i) { return (toMin(a.open) || 0) + i * (Number(a.mins) || 120); }
+/* ---------- blocked times: cleaning, repairs, out of service ... for any dates and any hours ---------- */
+var BLOCK_REASONS = ["Cleaning", "Maintenance or repair", "Out of service", "Private event", "Closed that day", "Other"];
+// Every block the office saved ("fblock" records), newest first.
+function blockList() { return vals("fblock").slice().sort(function (a, b) { return String(b.from || "").localeCompare(String(a.from || "")); }); }
+// True if the block covers this facility ("*" means every facility).
+function blockFits(b, name) { return b.facility === "*" || b.facility === name; }
+// True if the block applies on this day (an empty end date means "until further notice").
+function blockOnDay(b, day) { return !!b.from && day >= b.from && (!b.to || day <= b.to); }
+// The block that closes the minutes [from, to) of a facility on a day, or null.
+function blockHit(name, day, from, to) {
+  var all = blockList();
+  for (var k = 0; k < all.length; k++) {
+    var b = all[k];
+    if (!blockFits(b, name) || !blockOnDay(b, day)) continue;
+    if (b.hours !== "some") return b;
+    var bs = toMin(b.start), be = toMin(b.end);
+    if (bs != null && be != null && from < be && to > bs) return b;
+  }
+  return null;
+}
+// The block that closes one time slot of a facility on a day, or null.
+function slotBlock(f, i, day) {
+  var a = facilities()[f]; if (!a) return null;
+  var s = slotStartMin(a, i); return blockHit(a.name, day, s, s + (Number(a.mins) || 120));
+}
+// "Cleaning, 1 PM – 3 PM" style text for a block.
+function blockWhenText(b) {
+  var hrs = b.hours !== "some" ? "All day" : (function () { var x = clock(toMin(b.start) || 0), y = clock(toMin(b.end) || 0); return x.t + " " + x.ap + " – " + y.t + " " + y.ap; })();
+  var d1 = keyToDate(b.from), d2 = b.to ? keyToDate(b.to) : null, f = function (d) { return d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""; };
+  var days = !b.to ? "from " + f(d1) + " until further notice" : b.to === b.from ? f(d1) : f(d1) + " to " + f(d2);
+  return days + " · " + hrs;
+}
 /* what one time of one amenity looks like on one day: past | closed | booked | pending | open */
 function slotState(f, i, day) {
   var a = facilities()[f]; if (!a) return "closed";
@@ -426,6 +486,7 @@ function slotState(f, i, day) {
   if (day === today && slotStartMin(a, i) <= now.getHours() * 60 + now.getMinutes()) return "past";
   var b = setting("blocked");
   if (day === b.day && (b.keys || []).indexOf(slotKey(f, i)) >= 0) return "closed";
+  if (slotBlock(f, i, day)) return "closed";
   var hit = vals("booking").filter(function (x) { return x.day === day && Number(x.slot) === i && x.place === a.name && (x.status === "Pending" || x.status === "Approved"); })[0];
   return hit ? (hit.status === "Approved" ? "booked" : "pending") : "open";
 }
@@ -439,24 +500,7 @@ function dayCounts(f, day) {
 // True if the admin blocked this time slot.
 function slotClosed(f, i) {
   var b = setting("blocked");
-  return b.day === dayKey(new Date()) && (b.keys || []).indexOf(slotKey(f, i)) >= 0;
-}
-// All polls with their vote counts.
-function pollsAll() {
-  var votes = list("vote");
-  return newest(list("poll")).map(function (r) {
-    var p = r.v;
-    var opts = (p.options || []).map(function (t) { return { t: t, votes: 0 }; });
-    votes.forEach(function (x) {
-      if (Number(x.v.poll) === Number(r.id) && opts[x.v.option]) opts[x.v.option].votes++;
-    });
-    return { id: Number(r.id), q: p.question || "", open: !!p.open, closes: p.closes || "—", options: opts };
-  });
-}
-// The signed-in unit's vote for a poll (one vote per unit).
-function myVote(pollId) {
-  var r = getRow("vote", myUnit() + "|" + pollId);
-  return r ? Number(r.value.option) : undefined;
+  return (b.day === dayKey(new Date()) && (b.keys || []).indexOf(slotKey(f, i)) >= 0) || !!slotBlock(f, i, dayKey(new Date()));
 }
 // Month number of a date text, used to compare 'same month'.
 function monthOf(dateText) { var d = parseShort(dateText); return d ? d.getFullYear() * 12 + d.getMonth() : null; }
@@ -582,6 +626,25 @@ function openInfo(title, bodyHtml) {
 // Asks 'are you sure?' and runs fn only if the user confirms.
 /* The paper calls a checked payment "Verified"; the stored value stays "Confirmed" so older records keep working. */
 function statusText(s) { return s === "Confirmed" ? "Verified" : s; }
+/* Automatic posting: a payment the resident sent is posted to their dues by itself this many hours later (the office can still verify or reject it before then). */
+function autoPostCfg() { var c = setting("autopost"); return { on: c.on !== false, hours: Number(c.hours) > 0 ? Number(c.hours) : 24 }; }
+// When the resident sent the payment details (milliseconds). Older records only have a date.
+function proofSentAt(p) {
+  if (Number(p.at) > 1e12) return Number(p.at);
+  var d = parseShort(p.date || ""); return d ? d.getTime() + 9 * 3600000 : Date.now();
+}
+// "5h 12m", "45 min", "2 days" until a time (milliseconds), or "now".
+function waitText(ms) {
+  if (ms <= 60000) return "now";
+  var m = Math.round(ms / 60000), h = Math.floor(m / 60);
+  if (h >= 48) return Math.round(h / 24) + " days";
+  return h ? h + "h " + (m % 60) + "m" : m + " min";
+}
+// "Oct 28, 3:20 PM"
+function clockText(ms) {
+  var d = new Date(ms), h = d.getHours(), m = d.getMinutes();
+  return MONTHS[d.getMonth()] + " " + d.getDate() + ", " + (h % 12 || 12) + ":" + pad(m) + " " + (h < 12 ? "AM" : "PM");
+}
 function confirmBox(title, text, label, fn, danger) {
   openForm({ title: title, intro: esc(text), fields: [], submit: label, onSubmit: async function () { return await fn(); } });
   if (danger) { var b = $("#modal button[type=submit]"); if (b) b.style.background = "#A02B1D"; }
