@@ -4,7 +4,7 @@
    from their own dashboard (resident.js: recordSelfForm). Shared by admin.html and resident.html.
    ========================================================================== */
 /* Turn on when the database lets residents change these fields of their own unit record (records_guard currently allows only the usage and status fields). */
-var REC_SELF_EDIT_ON = false;
+var REC_SELF_EDIT_ON = true;
 var REC_SELF_KEYS = ["residents", "members", "pets", "emergencyName", "emergencyRelation", "emergencyPhone", "vehicles"];
 
 function recLinesOf(text) { return String(text || "").split(/\n+/).map(function (x) { return x.trim(); }).filter(Boolean); }
