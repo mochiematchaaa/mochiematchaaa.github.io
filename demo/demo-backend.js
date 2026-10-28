@@ -424,7 +424,7 @@
     if (PUBLIC.indexOf(r.kind) >= 0) return true;
     return r.unit === myunit();
   }
-  var RES_KINDS = ["booking", "grievance", "proof", "request", "statusUpdate", "rsvp", "vote", "unit", "activity"];
+  var RES_KINDS = ["booking", "grievance", "proof", "request", "statusUpdate", "rsvp", "vote", "unit", "activity", "walkin", "renewal"];
   function guard(op, row, old) {
     if (role() === "admin") return null;
     if (RES_KINDS.indexOf(row.kind) < 0) return "row-level security: kind " + row.kind;
@@ -435,7 +435,7 @@
       if (row.kind === "activity") return "Only the administrator can change that.";
       if (row.kind === "unit") {
         var keys = {}; Object.keys(ov || {}).concat(Object.keys(nv)).forEach(function (k) { keys[k] = 1; });
-        for (var k in keys) if (JSON.stringify((ov || {})[k]) !== JSON.stringify(nv[k]) && ["usage", "usageStatus", "usageRemark", "usageInfo", "status", "statusNote", "statusDate"].indexOf(k) < 0) return "Only the administrator can change unit details. (" + k + ")";
+        for (var k in keys) if (JSON.stringify((ov || {})[k]) !== JSON.stringify(nv[k]) && ["usage", "usageStatus", "usageRemark", "usageInfo", "status", "statusNote", "statusDate", "residents", "members", "pets", "emergencyName", "emergencyRelation", "emergencyPhone", "vehicles", "selfUpdated", "selfBy", "selfLog"].indexOf(k) < 0) return "Only the administrator can change unit details. (" + k + ")";
         if (["", "pending"].indexOf(nv.usageStatus || "") < 0) return "Only the administrator can approve a usage reading.";
       }
     }
@@ -515,7 +515,7 @@
             if (q.op === "delete") {
               var del = db.records.filter(match);
               if (role() !== "admin") {
-                var bad = del.filter(function (r) { return ["request", "booking", "rsvp"].indexOf(r.kind) < 0 || r.unit !== myunit(); });
+                var bad = del.filter(function (r) { return ["request", "booking", "rsvp", "walkin", "renewal"].indexOf(r.kind) < 0 || r.unit !== myunit(); });
                 if (bad.length) return resolve({ data: null, error: null });  // RLS silently hides
               }
               db.records = db.records.filter(function (r) { return del.indexOf(r) < 0; });
