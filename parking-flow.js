@@ -14,7 +14,7 @@
 
 /* Turn on when the database lets residents save "walkin" and "renewal" notes (the records policy allows only the kinds listed in rec_resident_kind).
    While it is off, a resident pays at the counter without announcing it, and there is no "I won't renew" button. */
-var RESIDENT_NOTES_ON = false;
+var RESIDENT_NOTES_ON = true;
 
 // How many days before the next payment the resident is told: see parkSoonDays() in reminders.js (the office can change it).
 
