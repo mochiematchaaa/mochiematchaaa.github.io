@@ -155,16 +155,18 @@
         { k: "name", label: "Household or owner", al: ["household", "owner", "resident", "resident owner", "owner name", "name", "full name", "family"] },
         { k: "type", label: "Owner or Tenant", al: ["occupancy", "owner or tenant", "ownership", "type"] },
         { k: "status", label: "Occupied or Vacant", al: ["status", "occupied", "vacancy"] },
+        { k: "area", label: "Floor area (sqm)", al: ["floor area", "floor area sqm", "area", "area sqm", "sqm", "square meters"] },
         { k: "contact", label: "Contact number", al: ["contact", "contact number", "mobile", "mobile number", "phone", "cellphone", "tel"] }
       ],
-      sample: [["Unit 12A", "Reyes Family", "Owner", "Occupied", "0917 555 0112"]],
+      sample: [["Unit 12A", "Reyes Family", "Owner", "Occupied", "45", "0917 555 0112"]],
       init: function () { var s = {}; unitNames().forEach(function (n) { s[lc(n)] = 1; }); return { have: s }; },
       check: function (v, c) {
         var label = cleanUnitLabel(v.unit); if (!v.unit || label === "Unit") return skip("No unit name");
         if (c.have[lc(label)]) return skip("Already on record");
         c.have[lc(label)] = 1;
         var type = /tenant/i.test(v.type) ? "Tenant" : "Owner", status = /vacant/i.test(v.status) ? "Vacant" : "Occupied";
-        return { rec: { unit: label, name: v.name || "—", type: type, status: status, contact: fixPhone(v.contact) || "—", usage: type === "Tenant" ? "tenant" : "owner" }, show: { unit: label } };
+        var ar = parseFloat(v.area);
+        return { rec: { unit: label, name: v.name || "—", type: type, status: status, area: ar > 0 ? ar : "", contact: fixPhone(v.contact) || "—", usage: type === "Tenant" ? "tenant" : "owner" }, show: { unit: label } };
       },
       save: function (r) { return put("unit", r.unit, r.unit, r); }
     },
@@ -212,7 +214,7 @@
         c.have.push(key);
         return { rec: { unit: unit, amount: a, note: note, dueDate: due }, show: { unit: unit, due: due, note: note } };
       },
-      save: function (r) { var id = nextId(), u = unitRec(r.unit) || {}; return put("due", id, r.unit, { id: id, unit: r.unit, name: u.name && u.name !== "—" ? u.name : "", amount: r.amount, note: r.note, dueDate: r.dueDate }); }
+      save: function (r) { var id = nextId(), u = unitRec(r.unit) || {}; return put("due", id, r.unit, { id: id, billedOn: shortDate(new Date()), unit: r.unit, name: u.name && u.name !== "—" ? u.name : "", amount: r.amount, note: r.note, dueDate: r.dueDate }); }
     },
     payments: {
       label: "payments received", file: "payments-received", note: "Each unit in the file has its unpaid charge marked as paid and a receipt is made. Use it for a list from the bank, GCash or the cashier.",
@@ -298,15 +300,17 @@
     },
     slots: {
       label: "motor parking slots", file: "parking-slots",
-      cols: [{ k: "name", label: "Slot name", req: 1, al: ["slot", "slot name", "slot no", "slot number", "name", "parking", "number"] }],
-      sample: [["M-25"], ["M-26"]],
+      cols: [{ k: "name", label: "Slot name", req: 1, al: ["slot", "slot name", "slot no", "slot number", "name", "parking", "number"] }, { k: "size", label: "Size (Small, Regular or Large)", al: ["size", "slot size", "kind"] }],
+      sample: [["M-25", "Small"], ["M-26", "Large"]],
       init: function () { return { have: {} }; },
       check: function (v, c) {
         var n = v.name.replace(/\s+/g, " ").trim(); if (!n) return skip("No slot name");
         if (getRow("slot", n) || c.have[lc(n)]) return skip("Slot already exists");
-        c.have[lc(n)] = 1; return { rec: { name: n }, show: {} };
+        c.have[lc(n)] = 1;
+        var sz = parkSizes().filter(function (z) { return lc(z.name) === lc(v.size || ""); })[0];
+        return { rec: { name: n, size: sz ? sz.name : "Regular" }, show: { size: sz ? sz.name : "Regular" } };
       },
-      save: function (r) { return put("slot", r.name, "", { id: r.name }); }
+      save: function (r) { return put("slot", r.name, "", { id: r.name, size: r.size || "Regular" }); }
     },
     announcements: {
       label: "announcements", file: "announcements",

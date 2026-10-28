@@ -3,7 +3,7 @@
 var state = {
   authed: false, view: "home", darkMode: false, bellOpen: false, bellSeen: false,
   facIdx: 0, pick: null, bookDay: "", calMonth: "", eventFilter: "all", pollFilter: "open",
-  payFor: "", payAmt: "", payMethod: "", payRef: "",
+  payFor: "", payAmt: "", payMethod: "", payRef: "", payImg: "", payDate: "",
   usage: "", usageInfo: {}, usageInfoFor: "", usageMsg: ""
 };
 try { state.darkMode = localStorage.getItem("rh_dark") === "1"; } catch (e) { /* storage blocked */ }
@@ -54,16 +54,40 @@ function eventInfo(r) {
     month: d ? MONTHS[d.getMonth()].toUpperCase() : "EVENT", day: d ? String(d.getDate()) : "•", mine: !!getRow("rsvp", myUnit() + "|" + r.id) };
 }
 // The items in the notification bell for this resident.
+// True if the resident already sent payment details for this charge and the office has not decided yet.
+function hasPendingProof(d) { return myProofs().some(function (p) { return p.v.status === "Pending" && p.v.forText === d.note; }); }
+// A notice's Pay button: open Dues with that charge ready in the payment form.
+function bellPay(id) { state.bellOpen = false; state.bellSeen = true; state.view = "dues"; payThis(id); }
 function notifs() {
   var out = [], unit = myUnit(), u = myRec();
+  if (u.profileUpdated && Number(u.profileUpdated) > Number(u.selfUpdated || 0) && Date.now() - Number(u.profileUpdated) < 7 * 86400000) out.push(["The office updated your household record on " + shortDate(new Date(Number(u.profileUpdated))) + ". You can see it on your dashboard.", "info", "home"]);
   myBookings().slice(0, 3).forEach(function (r) {
     if (r.v.status === "Approved") out.push(["Your " + r.v.place + " booking (" + r.v.when + ") was approved.", "good", "res"]);
     else if (r.v.status === "Denied") out.push(["Your " + r.v.place + " booking (" + r.v.when + ") was not approved.", "bad", "res"]);
   });
-  var over = myOpenDues().filter(function (r) { return isOverdue(r.v); });
-  if (over.length) out.push([over.length === 1 ? "A charge is overdue: " + over[0].v.note + "." : over.length + " charges are overdue.", "bad", "dues"]);
+  // charges the office billed: a summary of what is unpaid, and each new charge with the day it was billed
+  var openDues = myOpenDues().slice().sort(function (x, y) { return Number(y.id) - Number(x.id); });
+  if (openDues.length) {
+    var owed = openDues.reduce(function (t, r) { return t + Number(r.v.amount || 0); }, 0), latest = openDues[0];
+    out.push(["You have " + openDues.length + " unpaid charge" + (openDues.length > 1 ? "s" : "") + " (" + peso(owed) + "). Latest: " + latest.v.note + ", billed " + (billedOn(latest.id, latest.v) || "recently") + ".", "info", "dues"]);
+  }
+  openDues.filter(function (r) { var d = parseShort(billedOn(r.id, r.v)); return d && Date.now() - d.getTime() < 14 * 86400000; }).slice(0, 3).forEach(function (r) {
+    out.push(["New charge from the office: " + r.v.note + " (" + peso(Number(r.v.amount)) + "), billed " + billedOn(r.id, r.v) + (r.v.dueDate ? ", due " + r.v.dueDate : "") + ".", "info", "dues"]);
+  });
+  // reminders sent by the office, and charges that fall due in the next 3 days
+  myOpenDues().forEach(function (r) {
+    var rem = parseShort(r.v.remindedOn || ""), due = parseShort(r.v.dueDate || ""), days = due ? Math.round((due.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000) : null;
+    if (rem && Date.now() - rem.getTime() < 10 * 86400000) out.push(["Reminder from the office (" + r.v.remindedOn + ")" + (r.v.remindMsg ? ": " + r.v.remindMsg + " —" : ":") + " " + r.v.note + " (" + peso(Number(r.v.amount)) + ") " + (days == null ? "is waiting for your payment." : days < 0 ? "is overdue by " + (-days) + " day" + (days === -1 ? "" : "s") + "." : days === 0 ? "is due today." : "is due in " + days + " day" + (days === 1 ? "" : "s") + " (" + r.v.dueDate + ")."), days != null && days < 0 ? "bad" : "info", "dues"]);
+    else if (days != null && days >= 0 && days <= remCfg().dues.days && remCfg().dues.on !== "no" && !hasPendingProof(r.v)) out.push([r.v.note + " (" + peso(Number(r.v.amount)) + ") is due " + (days === 0 ? "TODAY. Pay within the day and send your proof so your dashboard updates" : days === 1 ? "tomorrow" : "in " + days + " days") + " (" + r.v.dueDate + "). Tap to pay and send your proof.", days === 0 ? "bad" : "warn", "dues", r.id]);
+  });
+  // every overdue charge, with a Pay button (the notice shows by itself the day after the due date)
+  myOpenDues().filter(function (r) { return isOverdue(r.v) && !hasPendingProof(r.v); }).slice(0, 4).forEach(function (r) {
+    var c = dueCountdown(r.v);
+    out.unshift(["Overdue" + (c ? " by " + (-c.n) + " day" + (c.n === -1 ? "" : "s") : "") + ": " + r.v.note + " (" + peso(Number(r.v.amount)) + "). Tap to pay and send your proof.", "bad", "dues", r.id]);
+  });
   myProofs().slice(0, 3).forEach(function (r) {
-    if (r.v.status === "Confirmed" && !r.v.direct) out.push(["Your payment (ref. " + r.v.reference + ") was verified. The receipt is under Dues.", "good", "dues"]);
+    if (r.v.status === "Confirmed" && !r.v.direct) out.push(["Your payment (ref. " + r.v.reference + ") was " + (r.v.auto ? "posted automatically" : "verified") + ". Receipt " + (r.v.receiptNo || "") + " is under Dues.", "good", "dues"]);
+    else if (r.v.status === "Pending") { var ap = autoPostCfg(); out.push(["We received your payment details (" + peso(Number(r.v.amount) || 0) + ", ref. " + r.v.reference + ")." + (ap.on ? " It will be posted to your dues automatically by " + clockText(proofSentAt(r.v) + ap.hours * 3600000) + ". If something does not match, the office will tell you here." : " The office will verify it soon."), "info", "dues"]); }
     else if (r.v.status === "Rejected") out.push(["Your payment (ref. " + r.v.reference + ") was rejected" + (r.v.reason ? ": " + String(r.v.reason).replace(/[.\s]+$/, "") : " (please check the reference number)") + ". You can send the correct details.", "bad", "dues"]);
   });
   if (u.usageStatus === "approved") out.push(["Your " + usageLabel(u.usage).toLowerCase() + " was approved.", "good", "rental"]);
@@ -71,6 +95,11 @@ function notifs() {
   else if (u.usageStatus === "pending") out.push(["Your " + usageLabel(u.usage).toLowerCase() + " is waiting for the administrator.", "info", "rental"]);
   var slot = list("slot").filter(function (r) { return r.v.unit === unit; })[0];
   if (slot) out.push(["Motor parking slot " + slot.id + " is assigned to your unit.", "good", "parking"]);
+  // a monthly rental that is about to end (or already ended): did they forget, or are they leaving?
+  var pd = slot ? parkDueInfo(slot.v) : null;
+  if (pd && pd.soon && !leaveNoteOf(unit) && !renewProofOf(unit, slot.id) && !walkinOf(unit, true)) out.unshift(["Your parking rental for " + slot.id + " " + (pd.late ? "has ended or is due" : "is almost up") + ". The next payment is due " + usageDate(pd.nextDue) + " (" + parkDaysText(pd.days) + "). Renew to keep your slot.", pd.late ? "bad" : "warn", "parking"]);
+  // the messages the office sent (rental approved, next due date)
+  newest(list("sms")).filter(function (r) { return r.unit === unit && Date.now() - Number(r.v.at || 0) < 14 * 86400000; }).slice(0, 2).forEach(function (r) { out.push(["Message from the office: " + r.v.text, "good", "parking"]); });
   var a = publishedAnns()[0];
   if (a) out.push(["New announcement: " + a.v.title + ".", "info", "home"]);
   var toVote = pollsAll().filter(function (p) { return p.open && myVote(p.id) === undefined; }).length;
@@ -118,17 +147,18 @@ function render() {
   app.classList.toggle("enter-shell", authChanged);
   if (viewChanged && !authChanged) window.scrollTo({ top: 0, behavior: "smooth" });
   var isHome = state.view === "home";
+  if (viewChanged && isHome && state.authed) setTimeout(function () { if (typeof remPopup === "function") remPopup(); }, 500);   // reminder pop-up each time the dashboard opens
   keepFocus(function () {
     mountApp(app, '<div class="shell"><aside class="side"><div class="side-brand"><img src="logo.jpg" alt=""><span>ResidentHub</span></div>' +
-      '<div class="side-label">General</div><nav>' + navBtn("home", "Home") + navBtn("book", "Book a facility") + navBtn("res", "Reservations") + navBtn("dues", "Dues") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("events", "Events") + "</nav>" +
-      '<div class="side-label">Community</div><nav>' + navBtn("polls", "Polls") + navBtn("directory", "Directory") + navBtn("gr", "Complaints") + navBtn("docs", "Documents") + "</nav>" +
-      '<div class="side-label">Account</div><nav>' + navBtn("rental", "Unit status") + navBtn("settings", "Settings") + "</nav>" +
-      '<div class="side-foot"><div class="side-user"><span class="avatar">' + esc(initials(myName())) + "</span><span><b>" + esc(myName()) + "</b><small>" + esc(myUnit()) + "</small></span></div>" +
-      '<button class="side-out" onclick="doLogout()">' + icon("logout") + "<span>Log out</span></button></div></aside>" +
+      '<div class="side-label">' + tr("General") + '</div><nav>' + navBtn("home", "Home") + navBtn("book", "Book a facility") + navBtn("res", "Reservations") + navBtn("dues", "Dues") + navBtn("parking", "Parking", parkingFreeTag()) + navBtn("events", "Events") + "</nav>" +
+      '<div class="side-label">' + tr("Community") + '</div><nav>' + navBtn("polls", "Polls") + navBtn("directory", "Directory") + navBtn("gr", "Complaints") + navBtn("docs", "Documents") + "</nav>" +
+      '<div class="side-label">' + tr("Account") + '</div><nav>' + navBtn("rental", "Unit status") + navBtn("settings", "Settings") + "</nav>" +
+      '<div class="side-foot"><div class="side-user"><span class="avatar">' + avatarInner(myPhoto(), myName()) + "</span><span><b>" + esc(myName()) + "</b><small>" + esc(myUnit()) + "</small></span></div>" +
+      '<button class="side-out" onclick="doLogout()">' + icon("logout") + "<span>" + tr("Log out") + "</span></button></div></aside>" +
       '<main><div class="topline">' + searchBox("Search events, polls, documents, contacts...") +
       '<div class="top-actions"><button class="icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode" onclick="toggleDarkMode()">' + icon(state.darkMode ? "sun" : "moon") + "</button>" + bellHtml() + "</div></div>" +
       '<div class="body ' + (isHome ? "with-aside" : "") + '"><div class="col">' + emergencyBanner() +
-      '<div class="pagehead"><p class="kicker">' + todayLabel() + "</p><h1>" + titles()[0] + "</h1><p>" + titles()[1] + "</p></div>" + view() + "</div>" + (isHome ? homeAside() : "") + "</div></main></div>");
+      '<div class="pagehead"><p class="kicker">' + todayLabel() + "</p><h1>" + tr(titles()[0]) + "</h1><p>" + tr(titles()[1]) + "</p></div>" + view() + "</div>" + (isHome ? homeAside() : "") + "</div></main></div>");
   });
 }
 
@@ -142,6 +172,40 @@ function homeAside() {
   return asideHtml(items.slice(0, 4), "See all events", "events");
 }
 // PAGE: Home.
+
+/* "My household record": what the office keeps on file for the unit. The office edits it; it shows up here. */
+function myRecordCard() {
+  return '<div style="margin-top:18px">' + recordSheetHtml(myUnit(), { admin: false, email: (DB.profile || {}).email || "", button: REC_SELF_EDIT_ON ? '<button class="btn primary" onclick="recordSelfForm()">Edit my details</button>' : "" }) + "</div>";
+}
+// Popup where the resident updates their own household details (the office keeps the name, mobile number and unit).
+function recordSelfForm() {
+  var unit = myUnit(), u = myRec();
+  openForm({
+    title: "Edit my details",
+    intro: "Keep your household up to date. The office sees what you save. Your name, mobile number and unit are kept by the office, so ask them if one of those is wrong.",
+    submit: "Save my details",
+    fields: [
+      { name: "residents", label: "How many people live here", type: "number", step: "1", value: u.residents || "" },
+      { name: "members", label: "Household members (one per line, e.g. Ana Reyes, spouse)", type: "textarea", value: u.members || "" },
+      { name: "pets", label: "Pets", value: u.pets || "", placeholder: "e.g. 1 dog" },
+      { name: "emergencyName", label: "Emergency contact name", value: u.emergencyName || "" },
+      { name: "emergencyRelation", label: "Relationship", value: u.emergencyRelation || "", placeholder: "e.g. Sister" },
+      { name: "emergencyPhone", label: "Emergency contact number", value: u.emergencyPhone || "" },
+      { name: "vehicles", label: "Vehicles (one per line, e.g. Motorcycle · ABC 1234)", type: "textarea", value: u.vehicles || "" }
+    ],
+    onSubmit: async function (d) {
+      var res = d.residents === "" || d.residents == null ? "" : parseInt(d.residents, 10);
+      if (res !== "" && !(res >= 0 && res <= 99)) return { error: "Enter how many people live in the unit, e.g. 3." };
+      await put("unit", unit, unit, Object.assign({}, myRec(), {
+        residents: res, members: String(d.members || "").trim(), pets: String(d.pets || "").trim(), emergencyName: String(d.emergencyName || "").trim(),
+        emergencyRelation: String(d.emergencyRelation || "").trim(), emergencyPhone: String(d.emergencyPhone || "").trim(), vehicles: String(d.vehicles || "").trim(),
+        selfUpdated: Date.now(), selfBy: myName()
+      }));
+      logAct("Resident updated household record, " + unit, "Units");
+      toast("Saved. The office can see your updated details.");
+    }
+  });
+}
 function viewHome() {
   var u = myRec(), open = myOpenDues(), bal = balanceFor(myUnit()), next = open[0], nb = nextBooking();
   var going = list("rsvp").filter(function (r) { return r.unit === myUnit(); }).length;
@@ -149,18 +213,19 @@ function viewHome() {
   var quick = [["Book a facility", "book"], ["Vote in polls", "polls"], ["See events", "events"], ["Declare unit usage", "rental"], ["Submit a complaint", "gr"]];
   var anns = publishedAnns().slice(0, 4), ns = notifs().slice(0, 5);
   var unitNo = String(myUnit()).replace(/^Unit\s*/i, "");
-  return '<div class="sc-grid">' +
+  return parkSoonBanner(false) + '<div class="sc-grid">' +
     summaryCard("yellow", "Dues", [[bal ? peso(bal) : "None", "Balance", "dues"], [open.length, "Open items", "dues"]], "cross", '<p class="sc-note">' + (next ? "Next due " + esc(next.v.dueDate || "on receipt") : "All dues settled") + "</p>") +
     summaryCard("pink", "Next reservation", [[nb ? esc(nb.v.place) : "None", nb ? esc(nb.v.status) : "Book a facility", nb ? "res" : "book"]], "heart", '<p class="sc-note">' + (nb ? esc(nb.v.when) : "No upcoming reservation") + "</p>") +
-    summaryCard("green", "My unit", [[esc(unitNo), "Unit"], [esc(usageLabel(u.usage || "owner")), "Usage", "rental"]], "triangle", '<div class="avatar-stack"><span class="av">' + esc(initials(myName())) + "</span></div>") +
+    summaryCard("green", "My unit", [[esc(unitNo), "Unit"], [esc(usageLabel(u.usage || "owner")), "Usage", "rental"]], "triangle", '<div class="avatar-stack"><span class="av">' + avatarInner(myPhoto(), myName()) + "</span></div>") +
     summaryCard("blue", "Community", [[toVote, "Polls to vote on", "polls"], [going, "Events going", "events"]], "burst") + "</div>" +
+    myRecordCard() +
     '<div class="pills-row">' + quick.map(function (q) { return '<button onclick="set({view:\'' + q[1] + '\'})">' + q[0] + "</button>"; }).join("") + "</div>" +
     '<div class="two-lists"><section><div class="sec-head"><h2>Announcements</h2></div><div class="lrows">' +
     (anns.map(function (r, i) {
       var p = r.v;
       return '<div class="lrow ' + (i === 0 ? "sel" : "") + '"><span class="lav t' + (1 + i % 4) + '">' + esc(String(p.title).charAt(0)) + '</span><span class="lmain"><b>' + esc(p.title) + "</b><small>" + esc(p.body) + '</small></span><span class="lpill t' + (1 + i % 4) + '">' + esc(p.date) + "</span></div>";
     }).join("") || '<p class="empty">No announcements yet.</p>') + "</div></section>" +
-    '<section class="panel blue"><div class="sec-head"><h2>Notifications</h2></div>' + (ns.map(function (n) { return '<div class="note"><b>' + esc(n[0]) + "</b></div>"; }).join("") || '<p class="empty">You are all caught up.</p>') + "</section></div>";
+    '<section class="panel blue"><div class="sec-head"><h2>Notifications</h2></div>' + (ns.map(function (n) { return '<div class="note' + (n[1] === "bad" ? " note-bad" : n[1] === "warn" ? " note-warn" : "") + '"><b>' + esc(n[0]) + "</b>" + (n[3] ? '<button class="btn primary" style="margin-top:8px;min-height:34px;padding:0 14px;font-size:12.5px" onclick="bellPay(\'' + escAttr(n[3]) + '\')">Pay now</button>' : "") + "</div>"; }).join("") || '<p class="empty">You are all caught up.</p>') + "</section></div>";
 }
 
 /* ==========================================================================
@@ -218,7 +283,7 @@ function viewBook() {
   var slots = cur.slots.map(function (t, idx) {
     var st = slotState(i, idx, day), picked = pick === idx && st === "open";
     var cls = picked ? "picked" : st === "open" ? "open" : st === "pending" ? "pending" : st === "past" || st === "closed" ? "off" : "booked";
-    var lab = picked ? "Selected" : st === "open" ? "Vacant" : st === "pending" ? "Pending" : st === "past" || st === "closed" ? "Unavailable" : "Booked";
+    var lab = picked ? "Selected" : st === "open" ? "Vacant" : st === "pending" ? "Pending" : st === "closed" ? ((slotBlock(i, idx, day) || {}).reason || "Unavailable") : st === "past" ? "Unavailable" : "Booked";
     return '<button class="slot ' + cls + '" ' + (st === "open" ? "" : "disabled") + (picked ? ' title="Click again to clear"' : "") + ' onclick="pickSlot(' + idx + ')"><span style="font-size:12px;font-weight:700">' + esc(t) + '</span><span style="font-size:12px">' + lab + "</span>" + (picked ? '<span class="slot-x" aria-hidden="true">×</span>' : "") + "</button>";
   }).join("");
   var req = pick != null && slotState(i, pick, day) === "open" ? '<div class="bk-req"><div><div class="bk-req-k">Your reservation request</div><div class="bk-req-v">' + esc(cur.name) + "</div><div class=\"bk-req-s\">" + esc(bookLabel(day)) + " · " + esc(cur.slots[pick]) + '</div></div><div class="bk-req-b"><button class="btn primary" onclick="submitBooking()">Request this time</button><button class="btn" style="font-size:20px;line-height:1;min-width:44px;padding:0" aria-label="Clear selection" title="Clear selection" onclick="clearPick()">×</button></div></div>' : '<p class="hint" style="margin:6px 0 0">Pick an open time to send a request.</p>';
@@ -321,13 +386,14 @@ function dueCountdown(d) {
 /* one entry per charge, plus the parking reservation that is waiting to be paid */
 function dueItems() {
   var proofs = myProofs(), items = myDues().map(function (r) {
-    var d = r.v, pending = proofs.some(function (p) { return p.v.status === "Pending" && p.v.forText === d.note; });
+    var d = r.v, pend = proofs.filter(function (p) { return p.v.status === "Pending" && p.v.forText === d.note; })[0], pending = !!pend;
     var conf = proofs.filter(function (p) { return p.v.status === "Confirmed" && p.v.forText === d.note; })[0];
-    var st = d.paid ? "paid" : isOverdue(d) ? "overdue" : pending ? "pending" : "open";
-    return { id: r.id, title: d.note, amount: Number(d.amount || 0), due: d.dueDate || "", st: st, d: d, receipt: conf ? conf.id : "", mon: (d.dueDate && parseShort(d.dueDate)) ? MONTHS[parseShort(d.dueDate).getMonth()] : "" };
+    var st = d.paid ? "paid" : pending ? "pending" : isOverdue(d) ? "overdue" : "open";
+    return { id: r.id, title: d.note, amount: Number(d.amount || 0), due: d.dueDate || "", st: st, d: d, billed: billedOn(r.id, d), receipt: conf ? conf.id : "", sent: pend ? proofSentAt(pend.v) : 0, mon: (d.dueDate && parseShort(d.dueDate)) ? MONTHS[parseShort(d.dueDate).getMonth()] : "" };
   });
   var prq = getRow("request", myUnit());
-  if (prq && prq.value.slot && prq.value.amount && !prq.value.confirmed) {
+  var hasParkDue = items.some(function (i) { return i.title === PARK_FOR && i.st !== "paid"; });   // one parking item only: the charge the office billed
+  if (prq && prq.value.slot && prq.value.amount && !prq.value.confirmed && !hasParkDue) {
     var pp = parkProof(myUnit(), prq.value.slot);
     items.unshift({ id: "parking", title: "Motor parking rental · " + prq.value.slot + " · " + parkPlanText(prq.value.plan, prq.value.days), amount: Number(prq.value.amount), due: "On reservation", st: pp ? (pp.v.status === "Confirmed" ? "paid" : "pending") : "open", d: {}, receipt: "", mon: "P", park: true });
   }
@@ -338,14 +404,22 @@ function dueCardHtml(it) {
   var cd = it.st === "open" || it.st === "overdue" ? dueCountdown(it.d) : null;
   var tone = it.st === "paid" ? "good" : it.st === "overdue" ? "bad" : it.st === "pending" ? "warn" : "info";
   var ic = it.park ? DZ_ICON.park : it.st === "paid" ? DZ_ICON.paid : it.st === "overdue" ? DZ_ICON.bad : it.st === "pending" ? DZ_ICON.wait : DZ_ICON.open;
-  var label = it.st === "paid" ? "Paid" : it.st === "overdue" ? "Overdue" : it.st === "pending" ? "Waiting for the office" : "To pay";
+  var label = it.st === "paid" ? "Paid" : it.st === "overdue" ? "Overdue" : it.st === "pending" ? "Payment sent" : "To pay";
+  var wait = it.st === "pending" && it.sent ? (autoPostCfg().on ? "Posts to your dues by " + clockText(it.sent + autoPostCfg().hours * 3600000) + " at the latest" : "Waiting for the office to verify it") : "";
   var act = it.st === "paid" ? (it.receipt ? '<button class="btn dz-mini" onclick="receiptFor(\'proof\',\'' + escAttr(it.receipt) + '\')">Receipt</button>' : "")
     : it.st === "pending" ? ""
     : '<button class="btn primary dz-mini" onclick="payThis(\'' + escAttr(it.id) + '\')">Pay ' + peso(it.amount).replace(/\.00$/, "") + "</button>";
   return '<div class="dz-item ' + tone + (state.dzFlash === it.id ? " flash" : "") + '" data-due="' + escAttr(it.id) + '"><span class="dz-ic ' + tone + '">' + ic + '</span><div class="dz-main"><b>' + esc(it.title) + '</b><div class="dz-sub"><span class="chip ' + (tone === "info" ? "info" : tone) + '">' + label + "</span>" +
-    (it.due ? '<span class="dz-date">' + esc(it.due) + "</span>" : "") + (cd ? '<span class="dz-cd ' + cd.tone + '">' + esc(cd.text) + "</span>" : "") + '</div></div><div class="dz-end"><div class="dz-amt">' + peso(it.amount) + "</div>" + act + "</div></div>";
+    (it.due ? '<span class="dz-date">' + esc(it.due) + "</span>" : "") + (it.billed ? '<span class="dz-date" title="The day the office billed this charge">Billed ' + esc(it.billed) + "</span>" : "") + (cd ? '<span class="dz-cd ' + cd.tone + '">' + esc(cd.text) + "</span>" : "") + '</div>' + (wait ? '<small class="dz-wait">' + esc(wait) + "</small>" : "") + '</div><div class="dz-end"><div class="dz-amt">' + peso(it.amount) + "</div>" + act + "</div></div>";
 }
 // PAGE: Dues and payments.
+// "Your monthly dues": how the unit's dues are worked out, and what it has been billed, has paid and still owes.
+function unitDuesHtml() {
+  var x = unitDues(myUnit());
+  if (!(x.area > 0) || !(x.rate > 0)) return "";
+  return '<div class="card"><h2 style="font-size:19px;margin-bottom:4px">Your monthly dues</h2><p style="margin:0 0 10px;font-size:13px;color:var(--muted)">Dues are charged per square meter of your unit.</p>' +
+    '<div class="kv" style="font-size:13.5px"><span>Floor area</span><b>' + esc(String(x.area)) + ' sqm</b><span>Rate</span><b>' + peso(x.rate) + ' per sqm</b><span>Monthly dues</span><b>' + peso(x.monthly) + '</b><span>Total billed</span><b>' + peso(x.billed) + '</b><span>Paid so far</span><b>' + peso(x.paid) + '</b><span>Balance</span><b>' + (x.balance ? peso(x.balance) : "None") + "</b></div></div>";
+}
 function viewDues() {
   var items = dueItems(), bal = balanceFor(myUnit());
   var prq = getRow("request", myUnit()), parkOpen = items.filter(function (i) { return i.park && i.st === "open"; })[0];
@@ -365,7 +439,7 @@ function viewDues() {
   if (todo.length) badges.push('<span class="dz-badge warn">' + todo.length + " to pay</span>");
   var hero = '<div class="card dz-hero' + (fresh ? " fresh" : "") + (!todo.length && total ? " done" : "") + '"><button class="dz-ring" title="' + (total ? "Tap me" : "") + '" onclick="dzPop(event)" aria-label="' + paid + " of " + total + ' charges paid"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="' + R + '"/><circle class="fg" cx="60" cy="60" r="' + R + '" stroke-dasharray="' + (pct * C).toFixed(1) + " " + C.toFixed(1) + '" transform="rotate(-90 60 60)"/></svg><span><b>' + paid + "/" + total + "</b><small>paid</small></span></button>" +
     '<div class="dz-hero-main"><div class="dz-eyebrow">' + (todo.length ? "You owe" : "Balance") + '</div><div class="dz-big' + (todo.length ? "" : " zero") + '"><span class="dz-count"' + (fresh ? ' data-to="' + owed + '"' : "") + ">" + (todo.length ? peso(owed) : "₱0") + '</span></div><p class="dz-mood">' + esc(mood) + '</p><div class="dz-badges">' + badges.join("") + "</div>" +
-    (todo.length ? '<div class="dz-cta"><button class="btn primary" onclick="payThis(\'' + escAttr(todo.slice().sort(function (a, b) { return (b.st === "overdue") - (a.st === "overdue"); })[0].id) + '\')">Pay now</button><button class="btn" onclick="exportMyDues()">Export (.csv)</button></div>' : '<div class="dz-cta"><button class="btn" onclick="dzPop(event)">Celebrate</button><button class="btn" onclick="exportMyDues()">Export (.csv)</button></div>') + "</div></div>";
+    (todo.length ? '<div class="dz-cta"><button class="btn primary" onclick="payThis(\'' + escAttr(todo.slice().sort(function (a, b) { return (b.st === "overdue") - (a.st === "overdue"); })[0].id) + '\')">Pay now</button><button class="btn" onclick="exportMyDues()">Export (.csv)</button></div>' : '<div class="dz-cta"><button class="btn" onclick="dzPop(event)">Celebrate</button><button class="btn" onclick="exportMyDues()">Export (.csv)</button></div>') + "</div>" + payFlowHtml(todo.length) + "</div>";
   var trail = items.filter(function (i) { return !i.park; }).slice(0, 12).reverse();
   var trailHtml = trail.length > 1 ? '<div class="card dz-trail"><div class="dz-trail-h"><h2>Your payment trail</h2><span class="hint" style="margin:0">Tap a block to jump to it</span></div><div class="dz-blocks">' + trail.map(function (i) {
     var tone = i.st === "paid" ? "good" : i.st === "overdue" ? "bad" : i.st === "pending" ? "warn" : "info";
@@ -374,8 +448,30 @@ function viewDues() {
   var tabs = pageTabs([["todo", "To pay (" + todo.length + ")"], ["paid", "Paid (" + paid + ")"], ["all", "All (" + total + ")"]], tab, "duesTab");
   var list_ = shown.length ? shown.map(dueCardHtml).join("") : '<div class="dz-empty"><b>' + (tab === "paid" ? "Nothing paid yet" : tab === "todo" ? "Nothing to pay" : "No charges yet") + "</b><span>" + (tab === "todo" ? "You are all caught up. Enjoy your day!" : tab === "paid" ? "Paid charges and their receipts show up here." : "Charges from the office show up here.") + "</span></div>";
   setTimeout(duesFx, 30);
-  return '<div class="dz-wrap">' + hero + trailHtml + '<div class="two-col dz-cols" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)"><div class="dz-left">' + tabs + '<div class="dz-list">' + list_ + "</div></div>" +
-    '<div class="dz-right">' + payFormHtml() + myPaymentsHtml() + parkingLinkHtml() + "</div></div></div>";
+  return '<div class="dz-wrap">' + duesAlertHtml(items) + hero + trailHtml + '<div class="two-col dz-cols" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)"><div class="dz-left">' + tabs + '<div class="dz-list">' + list_ + "</div>" + myPaymentsHtml() + parkingLinkHtml() + "</div>" +
+    '<div class="dz-right">' + unitDuesHtml() + payFormHtml() + "</div></div></div>";
+}
+// The "what happens next" strip in the hero: pay, send the proof, the office checks it, the receipt appears.
+function payFlowHtml(owing) {
+  var ap = autoPostCfg();
+  var steps = [["1", "Pay", "At the office, or by GCash, Maya or bank."], ["2", "Send your proof", "Reference number and a photo of your payment."], ["3", "The office checks it", ap.on ? "Posted by itself within " + ap.hours + " hours if it matches." : "The office verifies it."], ["4", "Receipt", "Your dues go down and your receipt appears."]];
+  return '<div class="dz-flow' + (owing ? "" : " calm") + '" aria-label="How paying works">' + steps.map(function (x) { return '<div class="dz-fs"><span>' + x[0] + "</span><b>" + x[1] + "</b><small>" + x[2] + "</small></div>"; }).join("") + "</div>";
+}
+// A notice at the top of the page when a charge is overdue or due within 2 days, with a Pay button.
+function duesAlertHtml(items) {
+  var over = items.filter(function (i) { return i.st === "overdue" && !i.park; }), soon = items.filter(function (i) { if (i.st !== "open" || i.park) return false; var c = dueCountdown(i.d); return c && c.n >= 0 && c.n <= 2; });
+  var sent = items.filter(function (i) { return i.st === "pending" && !i.park; });
+  var html = "";
+  over.forEach(function (i) {
+    var c = dueCountdown(i.d);
+    html += '<div class="dz-alert bad"><span class="dz-alert-ic">!</span><div><b>Overdue' + (c ? " by " + (-c.n) + " day" + (c.n === -1 ? "" : "s") : "") + ": " + esc(i.title) + '</b><small>' + peso(i.amount) + " was due " + esc(i.due) + ". Pay it now and send your proof so the office can check it.</small></div><button class=\"btn primary\" onclick=\"payThis('" + escAttr(i.id) + "')\">Pay " + peso(i.amount).replace(/\.00$/, "") + "</button></div>";
+  });
+  soon.forEach(function (i) {
+    var c = dueCountdown(i.d);
+    html += '<div class="dz-alert ' + (c.n === 0 ? "bad" : "warn") + '"><span class="dz-alert-ic">⏰</span><div><b>' + esc(i.title) + " is due " + (c.n === 0 ? "TODAY" : c.n === 1 ? "tomorrow" : "in 2 days") + '</b><small>' + peso(i.amount) + " · " + esc(i.due) + (c.n === 0 ? ". Please pay within the day and send your proof before it ends, so your dashboard updates. Already paid at the office? The office records it right away." : ". Send your proof before the due date so your dashboard updates.") + "</small></div><button class=\"btn primary\" onclick=\"payThis('" + escAttr(i.id) + "')\">" + (c.n === 0 ? "Pay and send proof" : "Pay now") + "</button></div>";
+  });
+  if (sent.length) html += '<div class="dz-alert info"><span class="dz-alert-ic">✓</span><div><b>' + sent.length + " payment" + (sent.length === 1 ? "" : "s") + ' sent, waiting for the office</b><small>You will get a notice and a receipt as soon as it is checked.</small></div></div>';
+  return html ? '<div class="dz-alerts">' + html + "</div>" : "";
 }
 /* count the balance up, and throw confetti the first time the page shows a clear balance */
 function duesFx() {
@@ -436,28 +532,54 @@ function exportMyDues() {
 // Chooses which due I am paying.
 function choosePayFor(v) {
   state.payFor = v;
-  var r = myOpenDues().filter(function (x) { return x.id === v; })[0];
+  var r = dueItems().filter(function (x) { return x.id === v; })[0];
   state.payPulse = !!v;
-  state.payAmt = r ? String(r.v.amount) : (v === "parking" ? String((getRow("request", myUnit()) || { value: {} }).value.amount || setting("motor_rate").rate || "") : "");
+  state.payAmt = r ? String(r.amount) : "";
   render();
 }
+function isoDay(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+// One line for the charge picker: what it is, how much, and when it is due.
+function payOptionText(i) {
+  var c = i.park ? null : dueCountdown(i.d);
+  return i.title + " · " + peso(i.amount) + (i.park ? " · due on reservation" : i.due ? " · due " + i.due + (c && c.n < 0 ? " (overdue)" : "") : " · due upon receipt");
+}
+// The facts about the charge picked in the pay form, so the resident can check it is the right one.
+function payChargeHtml(i) {
+  if (!i) return "";
+  var c = i.park ? null : dueCountdown(i.d), tone = c && c.n < 0 ? "bad" : c && c.n <= 2 ? "warn" : "info";
+  return '<div class="dz-chg"><div><small>Charge</small><b>' + esc(i.title) + '</b></div><div><small>Amount to pay</small><b>' + peso(i.amount) + '</b></div><div><small>Due date</small><b>' + esc(i.dueText || (i.park ? "On reservation" : i.due || "Upon receipt")) + '</b></div>' +
+    (c ? '<div><small>Status</small><span class="chip ' + tone + '">' + esc(c.text) + "</span></div>" : "") + (i.billed ? '<div><small>Billed</small><b>' + esc(i.billed) + "</b></div>" : "") + "</div>";
+}
 // The form to send a payment proof.
-function payFormHtml() {
-  var open = myOpenDues(), methods = payMethods().filter(function (m) { return m.enabled; });
+function payFormHtml(fixed) {
+  var payable = dueItems().filter(function (i) { return i.st === "open" || i.st === "overdue"; }), chosen = fixed || payable.filter(function (i) { return i.id === state.payFor; })[0];
+  var todayISO = isoDay(new Date()); if (!state.payDate) state.payDate = todayISO;
+  var methods = payMethods().filter(function (m) { return m.enabled; });
   if (!methods.length) methods = [{ name: PAY_OFFICE, details: "Pay at the administration office." }];
-  if (!state.payMethod || !methods.some(function (m) { return m.name === state.payMethod; })) state.payMethod = methods[0].name;
-  var cur = methods.filter(function (m) { return m.name === state.payMethod; })[0], step = !state.payFor ? 1 : 2;
+  if (!state.payMethod || !methods.some(function (m) { return m.name === state.payMethod; })) state.payMethod = (methods.filter(function (m) { return m.name !== PAY_OFFICE; })[0] || methods[0]).name;
+  var cur = methods.filter(function (m) { return m.name === state.payMethod; })[0], step = !state.payFor ? 1 : 2, walkIn = state.payMethod === PAY_OFFICE;
   var pulse = state.payPulse; state.payPulse = false;
-  return '<div class="card dz-pay' + (pulse ? " pulse" : "") + '" id="payPanel"><h2 style="font-size:19px;margin:0">I have paid</h2>' +
-    '<p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5">Three quick steps. The office checks your reference and issues your receipt.</p>' +
-    '<div class="dz-step"><span class="n ' + (state.payFor ? "ok" : "") + '">' + (state.payFor ? "✓" : "1") + '</span><div><label class="dz-lab">What did you pay for?<select onchange="choosePayFor(this.value)"><option value="">Choose…</option>' + open.map(function (r) { return '<option value="' + escAttr(r.id) + '" ' + (state.payFor === r.id ? "selected" : "") + ">" + esc(r.v.note) + "</option>"; }).join("") +
-    '<option value="parking" ' + (state.payFor === "parking" ? "selected" : "") + '>Motor parking rental</option><option value="other" ' + (state.payFor === "other" ? "selected" : "") + ">Other charge</option></select></label></div></div>" +
+  return '<div class="card dz-pay' + (pulse ? " pulse" : "") + '" id="payPanel"><h2 style="font-size:19px;margin:0">' + (fixed ? (fixed.renew ? "Renew your parking slot" : "Pay for your parking slot") : "I have paid") + '</h2>' +
+    '<p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5">' + (fixed ? "Pay with GCash, Maya or bank transfer, then send the details here with a screenshot of your payment. The office checks it and confirms your rental. Prefer to pay at the office? Choose Walk-in and pay at the counter." : "Paid online? Send the details here, with a photo of your payment if you have one. Paid at the office? Nothing to send; the office records it.") + '</p>' +
+    (fixed ? '<div class="dz-step"><span class="n ok">✓</span><div style="width:100%">' + payChargeHtml(chosen) + "</div></div>" :
+    '<div class="dz-step"><span class="n ' + (state.payFor ? "ok" : "") + '">' + (state.payFor ? "✓" : "1") + '</span><div style="width:100%"><label class="dz-lab">What did you pay for?<select onchange="choosePayFor(this.value)"><option value="">' + (payable.length ? "Choose one of your charges…" : "You have no unpaid charges") + "</option>" + payable.map(function (i) { return '<option value="' + escAttr(i.id) + '" ' + (state.payFor === i.id ? "selected" : "") + ">" + esc(payOptionText(i)) + "</option>"; }).join("") + "</select></label>" + payChargeHtml(chosen) + "</div></div>") +
     '<div class="dz-step"><span class="n ok">2</span><div><div class="dz-lab">How did you pay?</div><div class="dz-methods">' + methods.map(function (m) {
-      return '<button type="button" class="dz-method ' + (state.payMethod === m.name ? "on" : "") + '" onclick="pickMethod(\'' + escAttr(m.name) + '\')">' + esc(m.name) + "</button>";
-    }).join("") + '</div><div class="dz-how"><b>' + esc(cur.name) + '</b><span>' + esc(cur.details || "") + "</span></div></div></div>" +
+      return '<button type="button" class="dz-method ' + (state.payMethod === m.name ? "on" : "") + '" onclick="pickMethod(\'' + escAttr(m.name) + '\')">' + esc(m.name === PAY_OFFICE ? "Walk-in (pay at the office)" : m.name) + "</button>";
+    }).join("") + '</div><div class="dz-how"><b>' + esc(cur.name === PAY_OFFICE ? "Walk-in" : cur.name) + '</b><span>' + esc(cur.details || "") + "</span></div></div></div>" +
+    (walkIn && fixed ? walkBlockHtml(fixed) : walkIn ? '<div class="dz-step"><span class="n ok">3</span><div class="dz-walk"><b>Nothing to send for a walk-in payment</b><span>Pay at the counter. The office records it, issues your receipt and your dues go down on this page. If you paid online (GCash, Maya or bank), choose that method above and add a photo of your payment.</span></div></div>' :
     '<div class="dz-step"><span class="n ' + (state.payFor && state.payRef.trim().length >= 4 ? "ok" : "") + '">3</span><div style="display:flex;flex-direction:column;gap:10px;width:100%"><label class="dz-lab">Amount paid (₱)<input id="payAmt" type="number" min="0.01" step="0.01" placeholder="e.g. 450" value="' + escAttr(state.payAmt) + '" oninput="state.payAmt=this.value"></label>' +
-    '<label class="dz-lab">Reference number<input id="payRef" type="text" placeholder="Number on your receipt or transaction" value="' + escAttr(state.payRef) + '" oninput="state.payRef=this.value"></label></div></div>' +
-    '<button class="btn primary dz-send" onclick="submitPaymentProof()">Send payment details</button></div>';
+    '<label class="dz-lab">Date you paid<input id="payDate" type="date" max="' + todayISO + '" value="' + escAttr(state.payDate) + '" oninput="state.payDate=this.value"></label>' +
+    '<label class="dz-lab">Reference number<input id="payRef" type="text" placeholder="Number on your receipt or transaction" value="' + escAttr(state.payRef) + '" oninput="state.payRef=this.value"></label>' +
+    '<div class="dz-lab">Photo of your payment <small style="font-weight:400;color:var(--muted)">(screenshot or receipt, optional)</small>' +
+    (state.payImg ? '<div class="dz-photo"><img alt="Your payment photo" src="' + escAttr(state.payImg) + '" onclick="viewImage(state.payImg,\'Your payment photo\')"><div><button class="btn dz-mini" type="button" onclick="payPickImage()">Change</button> <button class="btn dz-mini" type="button" onclick="state.payImg=\'\';render()">Remove</button></div></div>'
+      : '<button class="btn dz-addphoto" type="button" onclick="payPickImage()">+ Add a photo of your payment</button>') +
+    '<small style="display:block;margin-top:4px;color:var(--muted);font-weight:400">' + (fixed ? "Add the screenshot so the office can confirm your rental faster." : "It helps the office check your payment faster.") + '</small></div></div></div>') +
+    (walkIn ? "" : '<button class="btn primary dz-send" onclick="submitPaymentProof()">Send payment details</button>') + "</div>";
+}
+// Chooses the photo of an online payment (shrunk so it fits).
+async function payPickImage() {
+  var d = await pickImage(1000, 0.72);
+  if (d) { state.payImg = d; render(); }
 }
 // The instructions on how to pay.
 function howToPayHtml() {
@@ -468,32 +590,55 @@ function howToPayHtml() {
 }
 // Sends the payment proof (the admin verifies it).
 function submitPaymentProof() {
+  if (state.payMethod === PAY_OFFICE) return toast("Walk-in payments are recorded by the office. Tap \"I'll walk in today\" so the office expects you.");
   var amount = parseFloat(state.payAmt), ref = state.payRef.trim();
   if (!state.payFor) return toast("Choose what the payment is for.");
   if (!(amount > 0)) return toast("Enter the amount you paid.");
   if (ref.length < 4) return toast("Enter the reference number from your receipt or transaction.");
+  var pd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state.payDate || ""), paidDay = pd ? new Date(+pd[1], +pd[2] - 1, +pd[3]) : null;
+  if (!paidDay || isNaN(paidDay.getTime())) return toast("Enter the date you paid.");
+  if (paidDay.getTime() > Date.now()) return toast("The date you paid cannot be in the future.");
   var open = myOpenDues().filter(function (x) { return x.id === state.payFor; })[0];
-  var forText = open ? open.v.note : state.payFor === "parking" ? PARK_FOR : "Other charge";
+  var renewing = state.payFor === "parking-renew", mineSlot = renewing ? list("slot").filter(function (s) { return s.v.unit === myUnit(); })[0] : null;
+  if (renewing && !mineSlot) return toast("You do not have a parking slot to renew.");
+  if (renewing && renewProofOf(myUnit(), mineSlot.id)) return toast("Your renewal payment was already sent. The office will check it.");
+  var forText = open ? open.v.note : (state.payFor === "parking" || renewing) ? PARK_FOR : "Other charge";
   if (myProofs().some(function (p) { return p.v.status !== "Rejected" && String(p.v.reference).toLowerCase() === ref.toLowerCase() && p.v.method === state.payMethod; })) return toast("That reference number was already submitted.");
   act(async function () {
     var id = nextId();
-    var proofRec = { id: id, unit: myUnit(), payer: myHousehold(), forText: forText, method: state.payMethod, reference: ref, amount: amount, date: shortDate(new Date()), status: "Pending" };
+    var proofRec = { id: id, unit: myUnit(), payer: myHousehold(), forText: forText, method: state.payMethod, reference: ref, amount: amount, date: shortDate(new Date()), at: Date.now(), status: "Pending", paidOn: shortDate(paidDay) };
+    if (state.payImg) proofRec.image = state.payImg;
     var prq = getRow("request", myUnit());
-    if (forText === PARK_FOR && prq && prq.value.slot) proofRec.slot = prq.value.slot;
+    if (forText === PARK_FOR && prq && prq.value.slot && !renewing) proofRec.slot = prq.value.slot;
+    if (renewing) { proofRec.slot = mineSlot.id; proofRec.renew = true; }
     await put("proof", id, myUnit(), proofRec);
     logAct("Payment reference sent, " + myUnit(), "Finance");
-    state.payFor = ""; state.payAmt = ""; state.payRef = "";
-    toast("Payment details sent. The office will verify them and your receipt will appear here.");
+    state.payFor = ""; state.payAmt = ""; state.payRef = ""; state.payImg = ""; state.payDate = ""; state.parkRenew = false;
+    var ap = autoPostCfg();
+    toast(ap.on ? "Payment details sent. It will be posted to your dues automatically by " + clockText(Date.now() + ap.hours * 3600000) + ", and your receipt will appear here." : "Payment details sent. The office will verify them and your receipt will appear here.");
   });
 }
-// My payment history.
+// My payment history: each payment shows where it is (sent, checked by the office, receipt).
 function myPaymentsHtml() {
-  var l = myProofs();
-  return '<div class="card"><h2 style="font-size:17px;margin-bottom:8px">My payments</h2>' + (l.length ? l.map(function (r) {
-    var p = r.v;
-    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border2)"><div style="min-width:0"><b style="font-size:14px">' + esc(p.forText || "") + '</b><div style="font-size:12.5px;color:var(--muted)">' + esc(p.method) + " · Ref " + esc(p.reference) + " · " + peso(Number(p.amount)) + "</div>" + (p.receiptNo ? '<div style="font-size:12.5px;color:var(--muted)">Receipt ' + esc(p.receiptNo) + "</div>" : "") + (p.status === "Rejected" && p.reason ? '<div style="font-size:12.5px;color:#b3261e">Reason: ' + esc(p.reason) + "</div>" : "") +
-      '</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="chip ' + chipFor(p.status) + '">' + esc(statusText(p.status)) + "</span>" + (p.status === "Confirmed" ? '<button class="btn" style="min-height:30px;padding:0 10px;font-size:12px" onclick="receiptFor(\'proof\',\'' + escAttr(r.id) + '\')">Receipt</button>' : "") + "</div></div>";
-  }).join("") : '<p style="margin:0;font-size:13px;color:var(--muted)">No payments sent yet. After you pay, send the details above.</p>') + "</div>";
+  var l = myProofs(), ap = autoPostCfg();
+  var cards = l.map(function (r) {
+    var p = r.v, st = p.status, sent = proofSentAt(p);
+    var s2 = st === "Pending" ? "now" : st === "Rejected" ? "bad" : "done", s3 = st === "Confirmed" ? "done" : "";
+    var msg2 = st === "Pending" ? (ap.on ? "Posts automatically by " + clockText(sent + ap.hours * 3600000) + " if it matches" : "Waiting for the office to verify it") : st === "Rejected" ? "Rejected" + (p.reason ? ": " + String(p.reason).replace(/[.\s]+$/, "") : "") : (p.auto ? "Posted automatically" : "Verified by the office") + (p.confirmedOn ? " · " + p.confirmedOn : "");
+    return '<div class="pt-card ' + (st === "Rejected" ? "bad" : st === "Confirmed" ? "good" : "warn") + '"><div class="pt-top"><div><b>' + esc(p.forText || "Payment") + '</b><small>' + esc(p.method) + " · Ref " + esc(p.reference) + " · " + peso(Number(p.amount)) + (p.paidOn ? " · paid " + esc(p.paidOn) : "") + '</small></div><span class="chip ' + chipFor(st) + '">' + esc(st === "Confirmed" ? (p.auto ? "Posted" : "Verified") : st === "Pending" ? "In review" : statusText(st)) + "</span></div>" +
+      '<ol class="pt-trail"><li class="done"><i>✓</i><span><b>Sent</b><small>' + esc(p.date || "") + "</small></span></li><li class=\"" + s2 + "\"><i>" + (s2 === "done" ? "✓" : s2 === "bad" ? "✕" : "2") + "</i><span><b>Office check</b><small>" + esc(msg2) + "</small></span></li><li class=\"" + s3 + "\"><i>" + (s3 ? "✓" : "3") + "</i><span><b>Receipt</b><small>" + (p.receiptNo ? esc(p.receiptNo) : "After it is checked") + "</small></span></li></ol>" +
+      '<div class="pt-act">' + (p.image ? '<button class="btn dz-mini" type="button" onclick="viewProofImage(\'' + escAttr(r.id) + '\')">View my photo</button>' : "") + (st === "Confirmed" ? '<button class="btn dz-mini" onclick="receiptFor(\'proof\',\'' + escAttr(r.id) + '\')">Receipt</button>' : "") + (st === "Rejected" ? '<button class="btn primary dz-mini" onclick="payAgain(\'' + escAttr(r.id) + '\')">Send again</button>' : "") + "</div></div>";
+  }).join("");
+  return '<div class="card"><h2 style="font-size:19px;margin:0 0 4px">My payments</h2><p style="margin:0 0 12px;font-size:13px;color:var(--muted)">Everything you sent, and where it is. The office checks each one before it counts.</p>' + (cards || '<p style="margin:0;font-size:13px;color:var(--muted)">Nothing sent yet. After you pay, send your details in the box on this page.</p>') + "</div>";
+}
+// "Send again" on a rejected payment: the form is filled with the same charge, method and amount.
+function payAgain(id) {
+  var p = getRow("proof", id); if (!p) return;
+  var d = myOpenDues().filter(function (x) { return x.v.note === p.value.forText; })[0];
+  state.payFor = p.value.forText === PARK_FOR ? "parking" : d ? d.id : "other";
+  state.payMethod = p.value.method; state.payAmt = String(p.value.amount || ""); state.payRef = ""; state.payImg = ""; state.payDate = ""; state.payPulse = true;
+  render();
+  var el = document.getElementById("payPanel"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 // Parking slots in natural order.
 function slotsSorted() { return list("slot").sort(function (a, b) { return naturalCompare(a.id, b.id); }); }
@@ -507,7 +652,7 @@ function parkingLinkHtml() {
 }
 // PAGE: Parking.
 function viewParkingPage() {
-  var slots = slotsSorted(), unit = myUnit(), rates = motorRates(), rate = rates.month, held = heldSlots();
+  var slots = slotsSorted(), unit = myUnit(), sizes = parkSizes(), held = heldSlots();
   var mine = slots.filter(function (s) { return s.v.unit === unit; })[0], req = getRow("request", unit);
   var rv = req ? req.value : null, pick = rv && rv.slot ? rv.slot : "", amount = rv && rv.amount ? Number(rv.amount) : 0;
   var proof = pick ? parkProof(unit, pick) : null, free = slots.filter(function (s) { return !s.v.unit && !held[s.id]; }).length;
@@ -518,23 +663,35 @@ function viewParkingPage() {
     var steps = '<div class="rental-steps" style="margin:14px 0 8px"><div class="rental-step done"><div class="dot">✓</div><div class="lbl">Slot chosen</div></div><div class="rental-step ' + (st === 1 ? "current" : "done") + '"><div class="dot">' + (st === 1 ? "2" : "✓") + '</div><div class="lbl">Pay ' + (amount ? peso(amount) : "the rental") + '</div></div><div class="rental-step ' + (st === 3 ? "done" : st === 2 ? "current" : "") + '"><div class="dot">' + (st === 3 ? "✓" : "3") + '</div><div class="lbl">Office approves</div></div></div>';
     var msg = st === 1 ? "Pay the rental, then send the payment details. The slot is held for you until the office decides." : st === 2 ? "Payment details sent (ref. " + esc(proof.v.reference) + "). The office will verify and assign the slot." : "Payment verified. The office will assign the slot.";
     hero = '<div class="card"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div class="park-big" style="width:72px;height:72px;font-size:22px;background:var(--warn-bg);color:var(--warn-fg)">' + esc(pick) + '</div><div style="flex:1 1 220px"><h2 style="font-size:19px;margin:0 0 2px">Slot ' + esc(pick) + ' reserved for you</h2><p class="hint" style="margin:0">' + (amount ? "Charge: <b>" + peso(amount) + "</b> · " + esc(parkPlanText(rv.plan, rv.days)) : "No rate set yet") + "</p></div></div>" + steps +
-      '<p class="hint" style="margin:0 0 12px">' + msg + '</p><div style="display:flex;gap:10px;flex-wrap:wrap">' + (st === 1 && amount ? '<button class="btn primary" onclick="payForParking()">Pay now</button>' : "") + (st === 1 ? '<button class="btn" onclick="cancelParkingRequest()">Cancel reservation</button>' : "") + "</div></div>";
+      '<p class="hint" style="margin:0 0 12px">' + msg + '</p><div style="display:flex;gap:10px;flex-wrap:wrap">' + (st === 1 && amount ? '<button class="btn primary" onclick="parkPayScroll()">Pay now</button>' : "") + (st === 1 ? '<button class="btn" onclick="cancelParkingRequest()">Cancel reservation</button>' : "") + "</div></div>";
   } else if (req) hero = '<div class="card park-hero warn"><div class="park-big">…</div><div><h2 style="font-size:19px;margin:0 0 2px">Request sent</h2><p class="hint" style="margin:0 0 10px">The office will assign you a slot when one is free. You will get a notice here.</p><button class="btn" onclick="cancelParkingRequest()">Cancel my request</button></div></div>';
-  else hero = '<div class="card park-hero"><div class="park-big">P</div><div><h2 style="font-size:19px;margin:0 0 2px">You do not have a parking slot yet</h2><p class="hint" style="margin:0">' + (slots.length ? "Tap a free slot on the map to reserve it" + (rates.month || rates.day ? ". Rent it by the " + (rates.month ? "month (<b>" + peso(rates.month) + "</b>)" : "") + (rates.month && rates.day ? " or by the day (<b>" + peso(rates.day) + "</b>)" : rates.day ? "day (<b>" + peso(rates.day) + "</b>)" : "") + ", paid before the office approves." : ".") : "The office has not set up the parking slots yet.") + "</p></div></div>";
+  else hero = '<div class="card park-hero"><div class="park-big">P</div><div><h2 style="font-size:19px;margin:0 0 2px">You do not have a parking slot yet</h2><p class="hint" style="margin:0">' + (slots.length ? "Tap a free slot on the map to reserve it. The rental depends on the size of the slot (see the price list). You pay before the office approves it." : "The office has not set up the parking slots yet.") + "</p></div></div>";
+  // Slot reserved but not paid yet: the payment form sits right here (method, screenshot, send).
+  var payCard = "";
+  if (!mine && req && pick && !proof && amount) {
+    var pi = dueItems().filter(function (i) { return (i.park || i.title === PARK_FOR) && (i.st === "open" || i.st === "overdue"); })[0];
+    if (pi) {
+      if (state.payFor !== pi.id) { state.payFor = pi.id; state.payAmt = String(pi.amount); }
+      var shown = Object.assign({}, pi, { amount: amount, title: pi.park ? pi.title : "Motor parking rental · " + pick + " · " + parkPlanText(rv.plan, rv.days) });
+      if (state.payAmt !== String(amount)) state.payAmt = String(amount);
+      payCard = payFormHtml(shown);
+    }
+  }
   var canPick = !mine && !req && slots.length;
   var grid = slots.map(function (s) {
     var isMine = mine && s.id === mine.id, u = s.v.unit, h = held[s.id], myHold = h && h === unit;
     var cls = isMine ? "mine" : u ? "taken" : myHold ? "held mine-held" : h ? "held" : "free", label = isMine ? "Yours" : u ? "Taken" : myHold ? "Yours" : h ? "Held" : "Free";
     var click = (canPick && !u && !h) ? ' onclick="reserveSlot(\'' + escAttr(s.id) + '\')"' : "";
-    return "<" + (click ? "button" : "div") + ' class="pk ' + cls + (click ? " pick" : "") + '"' + click + ' title="' + label + '"><b>' + esc(s.id) + "</b><small>" + label + "</small></" + (click ? "button" : "div") + ">";
+    var sz = s.v.size || "Regular", rt = parkRatesFor(sz);
+    return "<" + (click ? "button" : "div") + ' class="pk ' + cls + (click ? " pick" : "") + '"' + click + ' title="' + label + " · " + sz + (rt.month ? " · " + peso(rt.month) + " per month" : "") + '"><b>' + esc(s.id) + "</b><small>" + label + "</small><small>" + esc(sz) + (!u && !h && rt.month ? " · " + peso(rt.month) : "") + "</small></" + (click ? "button" : "div") + ">";
   }).join("");
-  return '<div class="two-col-e"><div style="display:flex;flex-direction:column;gap:16px">' + hero +
+  return '<div class="two-col-e"><div style="display:flex;flex-direction:column;gap:16px">' + hero + (mine ? parkRenewCardHtml(mine) : "") + payCard +
     (slots.length ? '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h2 style="font-size:19px">Parking map</h2><span class="hint" style="margin:0">' + free + " of " + slots.length + ' free' + (canPick ? " · tap a free slot" : "") + '</span></div><div class="pk-grid">' + grid + '</div><div class="pk-legend"><span><i class="free"></i>Free</span><span><i class="held"></i>Held</span><span><i class="taken"></i>Taken</span>' + (mine || pick ? '<span><i class="mine"></i>Yours</span>' : "") + "</div></div>" : "") +
-    '</div><div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">How it works</h2><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.8"><li>Tap a free slot on the map. The slot is held for you.</li><li>You choose a monthly or daily rental, and it shows up as a charge. Pay at the office, by bank transfer, GCash or Maya, then send the payment details.</li><li>When the office verifies your payment, the slot is yours. You get your receipt under Dues.</li></ol></div></div></div>';
+    '</div><div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">Rental price by slot size</h2><p class="hint" style="margin:0 0 8px">A bigger slot costs more. Each slot on the map shows its size.</p>' + sizes.map(function (z) { return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border2);font-size:13.5px"><span><b>' + esc(z.name) + "</b>" + (z.sqm ? ' <span style="color:var(--muted)">· ' + z.sqm + " sqm</span>" : "") + "</span><span><b>" + (z.month ? peso(z.month) + "</b> / month" : "—</b>") + (z.day ? " · <b>" + peso(z.day) + "</b> / day" : "") + "</span></div>"; }).join("") + '</div><div class="card"><h2 style="font-size:19px;margin-bottom:4px">How it works</h2><ol style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.8"><li>Tap a free slot on the map. The slot is held for you.</li><li>You choose a monthly or daily rental, and it shows up as a charge. Pay at the office, by bank transfer, GCash or Maya, then send the payment details.</li><li>When the office verifies your payment, the slot is yours. You get your receipt under Dues.</li></ol></div></div></div>';
 }
 // Requests a parking slot.
 function reserveSlot(id) {
-  var unit = myUnit(), rates = motorRates();
+  var unit = myUnit(), size = slotSize(id), rates = parkRatesFor(size);
   if (getRow("request", unit)) return toast("You already have a parking reservation.");
   var sl = getRow("slot", id), held = heldSlots();
   if (!sl || sl.value.unit || held[id]) return toast("That slot was just taken. Please pick another.");
@@ -542,7 +699,7 @@ function reserveSlot(id) {
   if (rates.month || !rates.day) opts.push(["month", "Monthly (1 month)" + (rates.month ? " · " + peso(rates.month) : "")]);
   if (rates.day) opts.push(["day", "Daily · " + peso(rates.day) + " per day"]);
   openForm({
-    title: "Reserve " + id, intro: "Choose how long you will rent it. The slot is held for you. Pay the rental and send the payment details, then the office approves it.",
+    title: "Reserve " + id + " · " + size + " slot", intro: "This is a " + size.toLowerCase() + " slot" + (rates.sqm ? " (" + rates.sqm + " sqm)" : "") + ", so the price is set for that size. Choose how long you will rent it. The slot is held for you. Pay the rental and send the payment details, then the office approves it.",
     fields: [{ name: "plan", label: "Rental", type: "select", options: opts, value: opts[0][0] }].concat(rates.day ? [{ name: "days", label: "Number of days (for Daily)", type: "number", value: "1" }] : []),
     submit: "Reserve " + id,
     onSubmit: async function (d) {
@@ -551,17 +708,22 @@ function reserveSlot(id) {
       if (getRow("request", unit)) return { error: "You already have a parking reservation." };
       var sl2 = getRow("slot", id);
       if (!sl2 || sl2.value.unit || heldSlots()[id]) return { error: "That slot was just taken. Please pick another." };
-      var q = parkQuote(plan, days);
+      var q = parkQuote(plan, days, size);
       await put("request", unit, unit, { unit: unit, who: myHousehold(), when: "Just now", at: Date.now(), slot: id, plan: q.plan, days: q.days, amount: q.amount });
       logAct("Motor parking slot " + id + " reserved (" + parkPlanText(q.plan, q.days) + "), " + unit, "Parking");
       toast(q.amount ? "Reserved. Pay " + peso(q.amount) + " to finish." : "Request sent to the administrator.");
     }
   });
 }
-// Goes to pay the parking charge.
+// "Pay now" on the Parking page: jump to the payment form on the same page.
+function parkPayScroll() {
+  state.payPulse = true; render();
+  var el = document.getElementById("payPanel"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+// Goes to pay the parking charge (from the Dues page).
 function payForParking() {
   var rq = getRow("request", myUnit()); if (!rq) return;
-  set({ view: "dues", payFor: "parking", payAmt: String(rq.value.amount || setting("motor_rate").rate || "") });
+  set({ view: "dues", payFor: "parking", payAmt: String(rq.value.amount || parkRatesFor(slotSize(rq.value.slot)).month || "") });
 }
 // Cancels my parking request.
 function cancelParkingRequest() {
@@ -590,26 +752,20 @@ function toggleRsvp(id) {
     toast(going ? "Removed from the event." : "See you there!");
   });
 }
-// PAGE: Polls.
+// PAGE: Polls and elections.
 function viewPolls() {
   var all = pollsAll(), open = all.filter(function (p) { return p.open; }).length;
-  var shown = all.filter(function (p) { return state.pollFilter === "all" || (state.pollFilter === "open") === p.open; });
-  return pageTabs([["open", "Open (" + open + ")"], ["closed", "Closed (" + (all.length - open) + ")"], ["all", "All"]], state.pollFilter, "pollFilter") +
-    '<div class="event-grid">' + (shown.map(function (p) {
-      var voted = myVote(p.id), showResults = !p.open || voted !== undefined, total = pollTotal(p);
-      return '<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px"><div><h2>' + esc(p.q) + '</h2><small style="color:var(--muted)">' + (p.open ? "Closes" : "Closed") + " " + esc(p.closes) + '</small></div><span class="chip ' + (p.open ? "good" : "info") + '">' + (p.open ? "Open" : "Closed") + "</span></div>" +
-        (showResults ? pollBars(p, voted) : '<div class="options">' + p.options.map(function (o, i) { return '<label class="opt"><input type="radio" name="poll-' + p.id + '" value="' + i + '"><span>' + esc(o.t) + "</span></label>"; }).join("") + '</div><button class="btn primary" style="margin-top:12px" onclick="castVote(' + p.id + ')">Submit my vote</button>') +
-        (showResults ? '<p class="hint" style="margin:12px 0 0">' + total + " vote" + (total === 1 ? "" : "s") + " so far" + (voted !== undefined ? " · thank you for voting" : "") + "</p>" : "") + "</div>";
+  var shown = all.filter(function (p) { return (state.pollFilter === "all" || (state.pollFilter === "open") === p.open) && pollCatMatch(p); });
+  return pageTabs([["open", "Open (" + open + ")"], ["closed", "Closed (" + (all.length - open) + ")"], ["all", "All"]], state.pollFilter, "pollFilter") + pollCatFilterHtml(all) +
+    '<div class="poll-list">' + (shown.map(function (p) {
+      var voted = myVote(p.id), election = p.kind === "election";
+      var canSee = !p.open || (voted !== undefined && p.showResults !== "closed");
+      var body = p.open && voted === undefined ? pollBallotHtml(p) + '<button class="btn primary" style="margin-top:6px" onclick="castVote(' + p.id + ')">' + (election ? "Submit my ballot" : "Submit my answers") + "</button>"
+        : canSee ? pollResultsHtml(p, voted, false) + '<p class="hint" style="margin:12px 0 0">' + p.ballots + (election ? " ballot" : " response") + (p.ballots === 1 ? "" : "s") + " so far" + (voted !== undefined ? " · thank you for voting" : "") + "</p>"
+        : '<p class="poll-note">Your ballot was recorded. The results are shown when voting closes on <b>' + esc(p.closes) + "</b>.</p>";
+      return '<div class="card poll-card' + (p.questions.length > 1 ? " wide" : "") + '"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px"><div style="min-width:0">' + pollChips(p) + '<h2 class="poll-title">' + richHtml(p.titleHtml, p.q) + "</h2>" +
+        (p.descHtml ? '<div class="poll-desc">' + richHtml(p.descHtml) + "</div>" : "") + '<small style="color:var(--muted)">' + (p.open ? "Closes" : "Closed") + " " + esc(p.closes) + (election ? " · secret ballot, one ballot per unit" : "") + '</small></div><span class="chip ' + (p.open ? "good" : "info") + '">' + (p.open ? "Open" : "Closed") + "</span></div>" + body + "</div>";
     }).join("") || '<p class="empty">No polls here.</p>') + "</div>";
-}
-// Saves my unit's vote (one per unit, cannot be changed).
-function castVote(id) {
-  var picked = document.querySelector('input[name="poll-' + id + '"]:checked');
-  if (!picked) return toast("Pick an option first.");
-  act(async function () {
-    await put("vote", myUnit() + "|" + id, myUnit(), { poll: Number(id), option: Number(picked.value) });
-    toast("Your vote was recorded. Thank you!");
-  });
 }
 
 /* ==========================================================================
@@ -661,7 +817,7 @@ function viewDocs() {
   var docs = newest(list("doc")).filter(function (r) { return r.v.audience !== "admin"; });
   return '<div class="card" style="padding:0;overflow:hidden">' + (docs.map(function (r) {
     var d = r.v;
-    return '<div style="display:flex;align-items:center;gap:12px;padding:0 22px;min-height:56px;border-top:1px solid var(--border2);font-size:14px;flex-wrap:wrap"><span style="flex-grow:1;font-weight:700">' + esc(d.name) + '</span><span style="color:var(--muted)">' + esc(d.cat || "Other") + '</span><span style="color:var(--muted)">' + esc(d.date) + '</span><button class="btn" onclick="openDoc(\'' + escAttr(r.id) + '\')">' + (d.raw ? "Download" : "View") + "</button></div>";
+    return '<div class="doc-row"><div class="doc-main"><b>' + esc(d.name) + '</b><small>' + esc(d.cat || "Other") + " · " + esc(d.date) + '</small></div><button class="btn" onclick="openDoc(\'' + escAttr(r.id) + '\')">' + (d.raw ? "Download" : "View") + "</button></div>";
   }).join("") || '<div style="padding:22px;text-align:center;color:var(--muted)">The association has not shared any document yet.</div>') + "</div>";
 }
 
@@ -761,12 +917,7 @@ function saveUnitUsage() {
    Settings
    ========================================================================== */
 function viewSettings() {
-  var p = me();
-  return '<div class="two-col-e"><div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">Profile</h2><p style="margin:0 0 12px;font-size:13px;color:var(--muted)">To change your name, email, mobile number or unit, ask the administration office.</p>' +
-    '<div class="kv"><span>Full name</span><b>' + esc(p.name || "—") + "</b><span>Email</span><b>" + esc(p.email) + "</b><span>Mobile</span><b>" + esc(p.phone || "Not added") + "</b><span>Unit</span><b>" + esc(p.unit || "—") + "</b></div></div>" +
-    '<div class="card"><h2 style="font-size:19px;margin-bottom:4px">Security</h2><p style="margin:0 0 12px;font-size:13px;color:var(--muted)">Change the password used to sign in to this account.</p><button class="btn primary" onclick="changePasswordForm()">Change password</button></div></div>' +
-    '<div style="display:flex;flex-direction:column;gap:16px"><div class="card"><h2 style="font-size:19px;margin-bottom:4px">Appearance</h2><p style="margin:0 0 10px;font-size:13px;color:var(--muted)">Currently in ' + (state.darkMode ? "dark" : "light") + ' mode.</p><button class="btn" onclick="toggleDarkMode()">' + (state.darkMode ? "Switch to light mode" : "Switch to dark mode") + "</button></div>" +
-    '<div class="card"><h2 style="font-size:19px;margin-bottom:4px">Where you\'re signed in</h2><p style="margin:0 0 10px;font-size:13px;color:var(--muted)">You are signed in on this device. If you used a shared computer or lost a phone, sign out everywhere.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="signOut()">Log out here</button><button class="btn" style="color:#A02B1D" onclick="signOut(true)">Log out on all devices</button></div></div></div></div>';
+  return acctView();   // account.js: all settings, profile, password, devices, language
 }
 // Popup form to change my password.
 function changePasswordForm() {
@@ -780,7 +931,7 @@ function changePasswordForm() {
       if (chk.error) return { error: "Your current password is not correct." };
       var u = await sb.auth.updateUser({ password: d.pw });
       if (u.error) return { error: u.error.message };
-      toast("Password changed.");
+      acctMarkPw(); toast("Password changed.");
     }
   });
 }
@@ -800,7 +951,7 @@ function searchIndex() {
     pages.map(function (p) { return { t: p[0], s: "Open this page", tag: "Page", v: p[1] }; }));
 }
 // The items in the notification bell.
-function bellItems() { return notifs().map(function (n) { return { t: esc(n[0]), s: "Open", v: n[2] }; }); }
+function bellItems() { return notifs().map(function (n) { return { t: esc(n[0]), s: n[3] ? "Pay now" : "Open", v: n[2], pay: n[3] || "", tone: n[1] }; }); }
 
 (function () {
   document.addEventListener("pointerdown", function (e) { var b = e.target.closest(".btn"); if (b) b.classList.add("is-pressed"); });
