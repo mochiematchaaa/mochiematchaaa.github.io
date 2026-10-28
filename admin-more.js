@@ -733,7 +733,7 @@ function saveAutoPost() {
   var on = document.getElementById("apOn").checked, h = parseInt(document.getElementById("apHours").value, 10);
   if (!(h >= 1 && h <= 168)) return toast("Enter the waiting time in hours, from 1 to 168.");
   act(async function () {
-    await put("setting", "autopost", "", { on: on, hours: h });
+    await put("setting", "autopost", "", { on: on ? "yes" : "no", hours: h });
     logAct("Automatic posting " + (on ? "on, after " + h + " hours" : "turned off"), "Settings");
     toast(on ? "Saved. Clean payments post automatically " + h + " hours after they are sent." : "Saved. Every payment now waits for you to verify it.");
   });

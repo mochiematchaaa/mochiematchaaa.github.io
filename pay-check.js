@@ -183,7 +183,7 @@ function lateWarnHtml(open) {
   return '<div class="late-warn"><span class="late-ic">!</span><div><b>' + over.length + " overdue charge" + (over.length === 1 ? "" : "s") + " (" + peso(sum) + ")</b><small>" + (fees ? fees + " already got a late charge. " : "") + (fresh ? fresh + " not reminded in the last 24 hours." : "Everyone overdue was reminded today.") + '</small></div>' + (fresh ? '<button class="btn primary" onclick="remindAll()">Send reminders</button>' : "") + "</div>";
 }
 // Late charge setting: added by itself some days after the due date.
-function lateFeeCfg() { var c = setting("latefee"); return { on: c.on !== false, days: Number(c.days) >= 1 ? Number(c.days) : 1, pct: payCheckCfg().pct }; }
+function lateFeeCfg() { var c = setting("latefee"); return { on: c.on == null ? autoDefault() : (c.on === true || c.on === "yes"), days: Number(c.days) >= 1 ? Number(c.days) : 1, pct: payCheckCfg().pct }; }
 function lateFeeSettingsHtml() {
   var c = lateFeeCfg();
   return '<div class="lf-set"><b>Late charge</b><p class="hint" style="margin:2px 0 8px">When a charge is still unpaid after its due date, a late charge is added by itself, so an overdue charge never just sits there. It is added during the first week of being overdue (older ones are handled with “Did they pay?”), skipped if the resident already sent their payment, and taken off again if they turn out to have paid on time.</p>' +
@@ -195,7 +195,7 @@ function saveLateFee() {
   if (!(days >= 1 && days <= 30)) return toast("Enter the number of days, from 1 to 30.");
   if (!(pct > 0 && pct <= 100)) return toast("Enter the late charge as a percentage, from 0.1 to 100.");
   act(async function () {
-    await put("setting", "latefee", "", { on: on, days: days });
+    await put("setting", "latefee", "", { on: on ? "yes" : "no", days: days });
     await put("setting", "paycheck", "", { pct: pct });
     logAct("Automatic late charge " + (on ? "on, " + pct + "% after " + days + " day" + (days === 1 ? "" : "s") : "turned off"), "Settings");
     toast(on ? "Saved. A " + pct + "% late charge is added " + days + " day" + (days === 1 ? "" : "s") + " after the due date." : "Saved. Late charges are no longer added by themselves.");
@@ -246,7 +246,7 @@ rhEnter = function () { _rhEnter2(); setTimeout(autoLateFeeCheck, 2500); setTime
    The first time an administrator has the portal open in a new month, every unit that has not been billed for that month is billed
    by itself (floor area x the rate per sqm, on the unit's own due day). The same month is never billed twice, and units with no
    floor area are skipped. "Bill monthly dues" still works at any time. In a live system this would run on the server's clock. */
-function autoBillCfg() { return { on: setting("autobill").on !== "no" }; }
+function autoBillCfg() { var v = setting("autobill").on; return { on: v == null ? autoDefault() : v !== "no" }; }
 function autoBillSettingsHtml() {
   var c = autoBillCfg();
   return '<div class="lf-set"><b>Automatic monthly billing</b><p class="hint" style="margin:2px 0 8px">The first time you open the portal in a new month, every unit that has not been billed for that month yet is billed by itself: floor area × the rate per sqm, due on the unit\'s own due day. The same month is never billed twice, and units without a floor area are skipped. “Bill monthly dues” still works any time.</p>' +

@@ -627,7 +627,10 @@ function openInfo(title, bodyHtml) {
 /* The paper calls a checked payment "Verified"; the stored value stays "Confirmed" so older records keep working. */
 function statusText(s) { return s === "Confirmed" ? "Verified" : s; }
 /* Automatic posting: a payment the resident sent is posted to their dues by itself this many hours later (the office can still verify or reject it before then). */
-function autoPostCfg() { var c = setting("autopost"); return { on: c.on !== false, hours: Number(c.hours) > 0 ? Number(c.hours) : 24 }; }
+/* The three automations (automatic posting, late charges, monthly billing) start OFF on the real system: the administrator turns each one on in Settings.
+   In the in-site demo they start ON so the walkthrough shows them. A saved choice always wins. */
+function autoDefault() { return !!window.RH_DEMO; }
+function autoPostCfg() { var c = setting("autopost"); return { on: c.on == null ? autoDefault() : (c.on === true || c.on === "yes"), hours: Number(c.hours) > 0 ? Number(c.hours) : 24 }; }
 // When the resident sent the payment details (milliseconds). Older records only have a date.
 function proofSentAt(p) {
   if (Number(p.at) > 1e12) return Number(p.at);
