@@ -16,10 +16,10 @@ for name in ("admin.html", "resident.html"):
     s = re.sub(r'(href|src)="([A-Za-z0-9_\-]+\.(?:js|css))(\?v=\d+)?"', up, s)
     s = s.replace('<script src="../photo.js', '<script src="demo-backend.js?v=13"></script>\n<script src="../photo.js', 1)
     # the demo versions of maintenance.js and export-all.js replace the real ones, which only run on the real administrator page
-    s = re.sub(r'<script src="maintenance\.js[^"]*"></script>', '<script src="maintenance.js?v=13"></script>', s)
+    s = re.sub(r'<script src="maintenance\.js[^"]*"></script>', '<script src="maintenance.js?v=14"></script>', s)
     s = re.sub(r'<script src="export-all\.js[^"]*"></script>', '<script src="export-all.js?v=7"></script>', s)
     if name == 'resident.html' and 'maintenance.js' not in s:
-        s = re.sub(r'(<script src="\.\./resident\.js[^"]*"></script>)', r'\1\n<script src="maintenance.js?v=13"></script>', s, count=1)
+        s = re.sub(r'(<script src="\.\./resident\.js[^"]*"></script>)', r'\1\n<script src="maintenance.js?v=14"></script>', s, count=1)
     s = s.replace('<title>', '<title>DEMO · ', 1)
     s = s.replace('<head>', '<head>\n<meta name="robots" content="noindex">', 1)
     open(os.path.join(here, name), "w", encoding="utf-8").write(s)
