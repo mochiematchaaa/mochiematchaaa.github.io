@@ -1601,7 +1601,6 @@ function paymentSettings() {
     '<label class="fl" style="max-width:260px">Waiting time (hours after the resident sent it)<input id="apHours" type="number" min="1" max="168" step="1" value="' + cfg.hours + '"></label>' +
     '<div><button class="btn primary" onclick="saveAutoPost()">Save</button></div>' +
     '<div class="kv" style="font-size:13.5px"><span>Waiting now</span><b>' + pend.length + '</b><span>Clean (will post by themselves)</span><b>' + clean + "</b><span>Need your review</span><b>" + (pend.length - clean) + "</b></div>" +
-    '<p class="hint" style="margin:0">You can still verify or reject any payment yourself before the waiting time ends. The check runs while an administrator page is open, so keep the dashboard open during the day (or open it once in the morning).</p></div></div>' +
     '<div style="display:flex;flex-direction:column;gap:16px"><div class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Payment options</h2><p class="hint" style="margin:0">Where residents can pay (cash at the office, bank, GCash, Maya). They see these when they send their payment details.</p><div><button class="btn" onclick="payMethodsForm()">Edit payment options</button></div></div></div></div>';
 }
 // Settings > General: how many open complaints one unit may have at once. Changing it asks first, because a high number invites spam.
