@@ -958,13 +958,7 @@ async function startSession(session, fromLogin) {
     return renderLogin("This account is suspended. Please contact the administrator.");
   }
   DB.profile = p.data;
-  // each page is for one kind of account. At sign-in the other kind is turned away (no mixing of the two portals).
-  if (fromLogin && DB.profile.role !== ROLE) {
-    await sb.auth.signOut();
-    return renderLogin(ROLE === "admin"
-      ? "This is the Administrator sign-in. Residents sign in at the Resident Login."
-      : "This is the Resident sign-in. Administrators sign in at the Administrator Login.");
-  }
+  // each page is for one kind of account. If the other kind signs in here, they are sent straight to their own dashboard.
   if (DB.profile.role !== ROLE) {
     location.replace(DB.profile.role === "admin" ? "admin.html" : "resident.html");
     return;
