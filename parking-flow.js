@@ -61,12 +61,7 @@ function walkinMethod(via) { var f = WALKIN_VIA.filter(function (x) { return x[0
 
 /* ---------- messages to residents (shown on the resident dashboard) ---------- */
 // Saves a message for a unit and returns a short note for the toast. No text message leaves the system.
-async function sendSms(unit, text) {
-  var id = nextId();
-  await put("sms", id, unit, { id: id, unit: unit, text: text, at: Date.now(), status: "Sent" });
-  logAct("Message sent to " + unit + ": " + text, "Parking");
-  return "The resident was notified on their dashboard.";
-}
+async function sendSms(unit, text) { return ""; }   // texts are not used; the resident sees the approval in the app
 // The message a resident gets when a parking payment is approved.
 function approvedSmsText(slotId, slotVal, receipt, amount, renewed) {
   var d = parkDueInfo(slotVal);
